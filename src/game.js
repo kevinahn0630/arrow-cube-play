@@ -8,6 +8,7 @@ import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars
 import { STAGE_SEEDS } from './stage-seeds.js';
 import { TUTORIALS, tutorialParams, findTarget, switchHint, lookCell } from './tutorial.js';
 import { TUTORIAL_SEEDS } from './tutorial-seeds.js';
+import { worldIcon } from './flags.js';
 import { themeOf } from './themes.js';
 import { scenery } from './scenery.js';
 import { wakeAudio, playLeave, playBump, isMuted, setMuted } from './sound.js';
@@ -183,6 +184,8 @@ const game = {
   // switch move lit now (hint) and whether it is between steps (wait).
   tut: null,
   turn: null, // the camera turning to show something: { from, to, up, upTo, len, t0 }
+  screen: 'splash', // what is in front: the loading screen, the home screen or the game ('play')
+  playing: false, // a stage has been picked since the game started (the home screen can go back to it)
 };
 
 function world(p) {
@@ -1284,13 +1287,20 @@ function frame(now) {
     showClear();
   }
 
-  renderer.render(scene, camera);
+  // Behind the loading and home screens nothing shows: no need to draw.
+  if (game.screen === 'play') renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 
 // ---------- UI
 
 function hud() {
+  // The world's flag, drawn again only when the world changes.
+  const look = game.world === 'free' ? (game.params.gimmick ?? 'home') : game.world;
+  if ($('worldFlag').dataset.world !== look) {
+    $('worldFlag').dataset.world = look;
+    $('worldFlag').innerHTML = worldIcon(look);
+  }
   if (game.world === 'free') {
     $('world').textContent = `🧪 생성기${game.params.gimmick ? ` · ${WORLDS[game.params.gimmick].name}` : ''}`;
     $('stageLabel').textContent = `시드 ${game.params.seed}`;
@@ -1351,15 +1361,17 @@ function showTutorialDone() {
   $('clear').hidden = false;
 }
 
-// ---------- world menu
+// ---------- home screen and stage menu
 
-// Two screens in one sheet: the worlds (home, then the countries by tier, each card
-// with its stars and how many stages are cleared), and one world's stages. A tier
+// The home screen lists the worlds in groups by difficulty (home, then the countries
+// by tier), each card with its flag, its stars and how many stages are cleared. A tier
 // short of the stars it needs shows its lock but stays open while the game is being
-// built. Hovering a stage shows its expected wrong taps, for tuning.
+// built. A world opens its stage menu, a sheet over the home screen or the game.
+// Hovering a stage shows its expected wrong taps, for tuning.
 const progress = loadProgress();
 const COUNTRIES = Object.keys(WORLDS).filter((w) => WORLDS[w].tier);
 const starText = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
+const GROUPS = ['입문', '쉬움', '보통', '어려움']; // by tier
 
 function node(tag, cls, text) {
   const e = document.createElement(tag);
@@ -1368,29 +1380,54 @@ function node(tag, cls, text) {
   return e;
 }
 
-function openMenu() {
-  if (game.world === 'free') showWorlds();
-  else showStages(game.world);
-  $('menu').hidden = false;
+// A flag (flags.js) in a span.
+function flagOf(key) {
+  const f = node('span', 'flag');
+  f.innerHTML = worldIcon(key);
+  return f;
 }
 
-const closeMenu = () => ($('menu').hidden = true);
+// The home screen, with 이어서 하기 back into the stage the player left (if it is
+// still going).
+function showHome() {
+  closeMenu();
+  $('clear').hidden = true;
+  game.screen = 'home';
+  renderHome();
+  $('home').hidden = false;
+}
 
-function showWorlds() {
+// Into the game: the home screen and the menu put away.
+function play() {
+  closeMenu();
+  $('home').hidden = true;
+  game.screen = 'play';
+  game.playing = true;
+}
+
+function renderHome() {
   const total = totalStars(progress);
-  $('menuBack').hidden = true;
-  $('menuTitle').textContent = '월드';
-  $('menuSub').textContent = `모은 별 ★ ${total} / ${COUNTRIES.length * STAR_AT.length}`;
-  const body = $('menuBody');
-  body.replaceChildren(worldCard('home'));
-  for (const tier of [1, 2, 3]) {
+  $('homeStars').innerHTML = `<span class="stars">★</span> ${total} / ${COUNTRIES.length * STAR_AT.length}`;
+  const body = $('homeBody');
+  body.replaceChildren();
+  if (game.playing && game.world !== 'free' && !game.cleared && !game.stuck) {
+    const back = node('button', 'continue');
+    const text = node('span', 'continue-text');
+    text.append(node('b', '', '이어서 하기'), node('small', '', `${WORLDS[game.world].name} · ${game.stage ? `스테이지 ${game.stage}` : '튜토리얼'}`));
+    back.append(flagOf(game.world), text);
+    back.onclick = play;
+    body.append(back);
+  }
+  for (const tier of [0, 1, 2, 3]) {
     const need = TIER_STARS[tier];
     const open = tierOpen(progress, tier);
-    const head = node('div', 'tier');
-    head.append(node('b', '', `${'★'.repeat(tier)} ${need ? `별 ${need}개` : '처음부터'}`));
-    if (!open) head.append(node('span', '', `🔒 별 ${need - total}개 더 · 개발 중에는 열려 있음`));
+    const head = node('div', 'group-head');
+    const name = node('b', '', GROUPS[tier]);
+    if (tier) name.append(node('span', 'stars', '★'.repeat(tier)));
+    const note = !tier ? '기본 규칙 익히기' : !need ? '처음부터' : open ? `별 ${need}개 · 열림` : `🔒 별 ${need - total}개 더 · 개발 중에는 열려 있음`;
+    head.append(name, node('span', 'note', note));
     const grid = node('div', 'world-grid');
-    for (const key of COUNTRIES) if (WORLDS[key].tier === tier) grid.append(worldCard(key, !open));
+    for (const key of Object.keys(WORLDS)) if (WORLDS[key].tier === tier) grid.append(worldCard(key, !open));
     body.append(head, grid);
   }
   body.scrollTop = 0;
@@ -1398,28 +1435,40 @@ function showWorlds() {
 
 function worldCard(key, locked = false) {
   const w = WORLDS[key];
-  const [name, gimmick = w.about] = w.name.split(' · ');
+  const [name, gimmick = '기믹 없음'] = w.name.split(' · ');
   const n = w.stages.length;
   const done = clearedCount(progress, key);
-  const card = node('button', `world-card${key === game.world ? ' current' : ''}${locked ? ' locked' : ''}`);
+  const card = node('button', `world-card${game.playing && key === game.world ? ' current' : ''}${locked ? ' locked' : ''}`);
   card.style.setProperty('--accent', themeOf(key).accent);
-  const top = node('span', 'wc-top');
-  top.append(node('span', 'wc-name', name));
-  if (w.tier) top.append(node('span', 'stars', locked && !done ? '🔒' : starText(starsOf(progress, key))));
+  const main = node('span', 'wc-main');
+  main.append(node('span', 'wc-name', name), node('span', 'wc-gimmick', gimmick));
+  const foot = node('span', 'wc-foot');
   const bar = node('span', 'wc-bar');
   const fill = node('i');
   fill.style.width = `${(100 * done) / n}%`;
   bar.append(fill);
-  card.append(top, node('span', 'wc-gimmick', gimmick), bar, node('span', 'wc-count', `${done} / ${n}`));
+  foot.append(bar);
+  if (w.tier) foot.append(node('span', 'stars', locked && !done ? '🔒' : starText(starsOf(progress, key))));
+  foot.append(node('span', 'wc-count', `${done} / ${n}`));
+  card.append(flagOf(key), main, foot);
   card.setAttribute('aria-label', `${w.name}, ${done}/${n} 클리어${w.tier ? `, 별 ${starsOf(progress, key)}개` : ''}${locked ? ', 잠김' : ''}`);
-  card.onclick = () => showStages(key);
+  card.onclick = () => openMenu(key);
   return card;
 }
+
+// World key's stage menu; from the generator, the home screen.
+function openMenu(key = game.world) {
+  if (key === 'free') return showHome();
+  showStages(key);
+  $('menu').hidden = false;
+}
+
+const closeMenu = () => ($('menu').hidden = true);
 
 function showStages(key) {
   const w = WORLDS[key];
   const n = w.stages.length;
-  $('menuBack').hidden = false;
+  $('menuFlag').innerHTML = worldIcon(key);
   $('menuTitle').textContent = w.name;
   $('menuSub').textContent = `${w.tier ? `${starText(starsOf(progress, key))} · ` : ''}${clearedCount(progress, key)} / ${n} 클리어`;
   const body = $('menuBody');
@@ -1435,7 +1484,7 @@ function showStages(key) {
     if (DEV) b.title = `예상 오답 ${STAGE_SEEDS[key][s - 1].wrong}회`;
     b.setAttribute('aria-label', `스테이지 ${s}${done ? ', 클리어' : ''}${here ? ', 지금 스테이지' : ''}`);
     b.onclick = () => {
-      closeMenu();
+      play();
       loadStage(key, s);
     };
     grid.append(b);
@@ -1445,7 +1494,7 @@ function showStages(key) {
   const tutorial = node('button', `tutorial-btn${done ? ' done' : ''}${key === game.world && game.stage === 0 ? ' current' : ''}`, done ? '튜토리얼 ✓' : '튜토리얼');
   tutorial.setAttribute('aria-label', `튜토리얼${done ? ', 끝냄' : ''}`);
   tutorial.onclick = () => {
-    closeMenu();
+    play();
     loadStage(key, 0);
   };
   body.replaceChildren(about, tutorial, grid);
@@ -1538,9 +1587,10 @@ $('guideSkip').onclick = () => {
 };
 $('solve').onclick = autoSolve;
 $('panelToggle').onclick = () => ($('panel').hidden = !$('panel').hidden);
-$('worldBtn').onclick = openMenu;
+$('worldBtn').onclick = () => openMenu();
+$('homeBtn').onclick = showHome;
 $('menuClose').onclick = closeMenu;
-$('menuBack').onclick = showWorlds;
+$('menuBack').onclick = showHome;
 // A tap on the dimmed backdrop, or Escape, closes the menu.
 $('menu').onclick = (e) => e.target === $('menu') && closeMenu();
 addEventListener('keydown', (e) => e.key === 'Escape' && closeMenu());
@@ -1570,15 +1620,27 @@ $('resetView').onclick = () => {
   camera.position.copy(HOME_VIEW);
   camera.up.set(0, 1, 0);
 };
-// Sound effects on or off (sound.js keeps the choice on the device).
+// Sound effects on or off, in the game and on the home screen (sound.js keeps the
+// choice on the device).
 const showSound = () => {
-  $('sound').textContent = isMuted() ? '🔇' : '🔊';
-  $('sound').title = isMuted() ? '효과음 켜기' : '효과음 끄기';
+  for (const id of ['sound', 'homeSound']) {
+    $(id).textContent = isMuted() ? '🔇' : '🔊';
+    $(id).title = isMuted() ? '효과음 켜기' : '효과음 끄기';
+  }
 };
 showSound();
-$('sound').onclick = () => {
+$('sound').onclick = $('homeSound').onclick = () => {
   setMuted(!isMuted());
   showSound();
+};
+
+// The loading screen's 눌러서 시작 (a tap anywhere on it, once shown) opens the home
+// screen. The tap also lets the browser play sound from then on.
+$('splash').onclick = () => {
+  if ($('start').hidden || $('splash').classList.contains('gone')) return;
+  $('splash').classList.add('gone');
+  setTimeout(() => ($('splash').hidden = true), 450);
+  showHome();
 };
 
 function resize() {
@@ -1607,3 +1669,5 @@ window.arrowCube = { game, pick, tap, camera, box, raycaster };
 
 loadStage('home', 1);
 requestAnimationFrame(frame);
+// Ready: the loading screen (index.html) fills its bar and shows 눌러서 시작.
+window.splash?.ready();

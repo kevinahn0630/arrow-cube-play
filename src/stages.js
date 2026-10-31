@@ -79,7 +79,7 @@ export const TIER_STARS = [0, 0, 15, 30];
 // Plain-text names: flag emoji show up as two letters on Windows.
 export const WORLDS = {
   home: {
-    name: '🏠 집 안', tier: 0, about: '기믹 없이 기본 규칙 익히기',
+    name: '집 안', tier: 0, about: '기믹 없이 기본 규칙 익히기',
     stages: HOME, seedBase: 0,
   },
   gate: {
