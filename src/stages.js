@@ -71,7 +71,9 @@ function gimmickStages(gimmick, start, top, k) {
 
 // Countries come in three tiers (`tier` 1–3; home is 0). A country gives a star for
 // 25, 30 and 40 of its stages cleared, and a tier opens once all countries together
-// have given TIER_STARS[tier] stars. `about` says in a line what the gimmick does.
+// have given TIER_STARS[tier] stars. `about` says in a line what the gimmick does;
+// `rules` are the lines of the card that explains it, shown the first time a world's
+// stage 1 opens (home's explains the basic rules).
 export const STAR_AT = [25, 30, 40];
 export const TIER_STARS = [0, 0, 15, 30];
 
@@ -79,86 +81,174 @@ export const TIER_STARS = [0, 0, 15, 30];
 export const WORLDS = {
   home: {
     name: '🏠 집 안', tier: 0, about: '기믹 없이 기본 규칙 익히기',
+    rules: [
+      '화살표를 누르면 머리가 가리키는 쪽으로 날아가 큐브 밖으로 나가요.',
+      '가는 길에 다른 화살표가 있으면 부딪혀 돌아와요. 그 화살표를 먼저 빼야 해요.',
+      '큐브를 끌어서 돌려 가며 모든 화살표를 빼내면 클리어! 두 손가락으로 벌리거나 오므리면 확대·축소돼요.',
+    ],
     stages: HOME, seedBase: 0,
   },
   gate: {
     name: '중국 · 관문', tier: 1, about: '같은 색 열쇠 화살표가 빠지면 관문이 열림',
+    rules: [
+      '색칠된 관문 칸은 같은 색 열쇠 화살표가 큐브에 있는 동안 닫혀 있어서 지나갈 수 없어요.',
+      '열쇠 화살표를 먼저 빼면 그 색 관문이 열려요.',
+    ],
     stages: gimmickStages('gate', 15.5, 295, 1.85), seedBase: 1_000_000,
   },
   pair: {
     name: '한국 · 짝', tier: 1, about: '같은 색 둘이 함께 빠짐',
+    rules: [
+      '같은 색 화살표 두 개는 짝이에요. 하나를 누르면 둘이 함께 나가요.',
+      '짝 둘 다 길이 비어 있어야 나갈 수 있어요.',
+    ],
     stages: gimmickStages('pair', 14, 240, 1.65), seedBase: 2_000_000,
   },
   mirror: {
     name: '프랑스 · 거울', tier: 2, about: '거울을 지나면 90° 꺾임',
+    rules: [
+      '거울 칸을 지나는 화살표는 거울에 맞고 90° 꺾여서 날아가요.',
+      '꺾인 다음의 길까지 비어 있어야 나갈 수 있어요.',
+    ],
     stages: gimmickStages('mirror', 17, 395, 2), seedBase: 3_000_000,
   },
   bell: {
     name: '영국 · 빅벤', tier: 3, about: '화살표가 하나 나갈 때마다 닫힌 색이 바뀜',
+    rules: [
+      '근위병 칸은 두 가지 색이에요. 꽉 칠해진 색은 닫혀 있어 지나갈 수 없고, 테두리만 있는 색은 지나갈 수 있어요.',
+      '화살표가 하나 나갈 때마다 닫힌 색이 바뀌어요.',
+      '남은 화살표가 하나도 못 나가면 처음부터 다시 해야 해요. 근위병을 지나는 화살표는 길이 열렸을 때 먼저 빼 두세요.',
+    ],
     stages: gimmickStages('bell', 19, 135, 1), seedBase: 4_000_000,
   },
   discus: {
     name: '그리스 · 원반', tier: 1, about: '모서리를 넘어 옆면까지 날아감',
+    rules: [
+      '색이 다른 원반 화살표는 면 끝에서 멈추지 않고 모서리를 넘어 옆면까지 날아가요.',
+      '옆면으로 넘어간 길까지 비어 있어야 나갈 수 있어요.',
+    ],
     stages: gimmickStages('discus', 14.5, 445, 1.7), seedBase: 5_000_000,
   },
   aurora: {
     name: '캐나다 · 오로라', tier: 1, about: '같은 색만 통과, 그 색이 다 빠지면 커튼이 걷힘',
+    rules: [
+      '색 커튼 칸은 같은 색 화살표만 지나갈 수 있어요.',
+      '그 색 화살표가 모두 빠지면 커튼이 걷혀서 어떤 화살표든 지나가요.',
+    ],
     stages: gimmickStages('aurora', 12.5, 325, 1.75), seedBase: 6_000_000,
   },
   belt: {
     name: '독일 · 벨트', tier: 3, about: '벨트를 돌려 화살표 위치를 맞춤',
+    rules: [
+      '큐브를 한 바퀴 두른 벨트 위의 짧은 화살표들은 벨트와 함께 움직여요.',
+      '벨트를 손가락으로 끌어서(또는 ◁ ▷ 버튼으로) 돌리면 화살표들의 자리가 바뀌어요. 길이 열린 자리로 옮겨서 빼세요.',
+    ],
     stages: gimmickStages('belt', 16, 555, 1.8), seedBase: 7_000_000,
   },
   tunnel: {
     name: '튀르키예 · 터널', tier: 3, about: '한 입구로 들어가 짝 입구로 나옴',
+    rules: [
+      '같은 색 테두리를 두른 터널 입구 두 개는 서로 이어져 있어요.',
+      '한 입구로 들어간 화살표는 짝 입구로 나와 계속 날아가요. 나온 뒤의 길도 비어 있어야 해요.',
+    ],
     stages: gimmickStages('tunnel', 14.5, 375, 1.95), seedBase: 10_000_000,
   },
   sundial: {
     name: '이집트 · 해시계', tier: 1, about: '화살표가 하나 나갈 때마다 해가 돌고 기둥 그림자도 따라 움직임',
+    rules: [
+      '기둥(오벨리스크)의 그림자 칸은 지나갈 수 없어요.',
+      '화살표가 하나 나갈 때마다 해가 다음 쪽으로 돌고 그림자도 따라 움직여요.',
+      '남은 화살표가 하나도 못 나가면 처음부터 다시 해야 해요. 그림자를 지나는 화살표는 길이 열렸을 때 먼저 빼고, 평범한 화살표는 아껴 두세요.',
+    ],
     stages: gimmickStages('sundial', 17.5, 165, 1.1), seedBase: 12_000_000,
   },
   lasso: {
     name: '미국 · 올가미', tier: 1, about: '서로 막힌 화살표는 올가미로만 끌어낼 수 있음',
+    rules: [
+      '고리가 달린 올가미 화살표는 가는 길에 처음 만난 화살표 하나를 함께 끌고 나가요.',
+      '서로 막고 있어서 그냥은 못 빼는 화살표들은 올가미로 끌어내세요.',
+    ],
     stages: gimmickStages('lasso', 18.5, 245, 1.7), seedBase: 13_000_000,
   },
   dial: {
     name: '멕시코 · 태양 달력', tier: 2, about: '화살표가 하나 나갈 때마다 원판이 시계방향으로 90° 돌아감',
+    rules: [
+      '3×3 원판 위의 짧은 화살표들은 원판과 함께 돌아요.',
+      '화살표가 하나 나갈 때마다 모든 원판이 시계방향으로 90° 돌아서, 원판 화살표의 자리와 방향이 바뀌어요.',
+      '남은 화살표가 하나도 못 나가면 처음부터 다시 해야 해요.',
+    ],
     stages: gimmickStages('dial', 7, 240, 1.85), seedBase: 14_000_000,
   },
   boomerang: {
     name: '호주 · 부메랑', tier: 1, about: '면 끝에서 머리 갈고리가 휜 쪽 옆 줄로 돌아와 반대쪽으로 나감',
+    rules: [
+      '갈고리가 달린 부메랑 화살표는 면 끝에 닿으면 갈고리가 휜 쪽 옆 줄로 돌아와 반대쪽 끝으로 나가요.',
+      '돌아오는 길까지 비어 있어야 나갈 수 있어요.',
+    ],
     stages: gimmickStages('boomerang', 19, 410, 1.75), seedBase: 15_000_000,
   },
   canal: {
     name: '이탈리아 · 운하', tier: 2, about: '물길에 들어가면 흐름을 따라감',
+    rules: [
+      '물길에 들어간 화살표는 물이 흐르는 방향을 따라 흘러가다가, 물길 끝에서 곧게 나가요.',
+      '흘러가는 길까지 비어 있어야 나갈 수 있어요.',
+    ],
     stages: gimmickStages('canal', 8, 270, 1.75), seedBase: 16_000_000,
   },
   eagle: {
     name: '러시아 · 쌍두독수리', tier: 2, about: '양쪽 끝 중 열린 쪽으로 나감',
+    rules: [
+      '양쪽 끝에 머리가 있는 독수리 화살표는 두 방향 중 열린 쪽으로 나가요.',
+      '두 쪽이 다 막혀 있을 때만 막힌 거예요.',
+    ],
     stages: gimmickStages('eagle', 13.5, 100, 1.3), seedBase: 17_000_000,
   },
   encierro: {
     name: '스페인 · 소몰이', tier: 2, about: '막힌 황소는 장애물 앞까지 돌진해 꼬리 자리를 비움',
+    rules: [
+      '뿔이 달린 황소 화살표는 길이 막혀 있어도 누르면 장애물 바로 앞까지 돌진해요. 돌진은 실수로 치지 않아요.',
+      '황소가 떠난 자리가 비어서 다른 화살표의 길이 열려요.',
+    ],
     stages: gimmickStages('encierro', 17, 235, 1.85), seedBase: 18_000_000,
   },
   vine: {
     name: '브라질 · 덩굴', tier: 2, about: '칼 화살표가 지나가는 덩굴은 칼이 빠지면 잘려 나감',
+    rules: [
+      '덩굴 칸은 길을 막아요.',
+      '칼 화살표가 그 덩굴을 지나는 길로 빠지면 덩굴이 잘려 사라져요.',
+    ],
     stages: gimmickStages('vine', 8.5, 280, 1.65), seedBase: 19_000_000,
   },
   lantern: {
     name: '태국 · 등불', tier: 2, about: '그림자 속은 등불과 그 빛줄기만 보이고, 등불이 빠지면 그림자가 걷힘',
+    rules: [
+      '그림자 속에서는 등불 화살표와 그 빛줄기만 보여요. 그림자에 완전히 숨은 화살표는 누를 수 없어요.',
+      '등불을 빼면 그 주변의 그림자가 걷혀요.',
+    ],
     stages: gimmickStages('lantern', 19.5, 660, 2.15), seedBase: 20_000_000,
   },
   diagonal: {
     name: '인도 · 차투랑가', tier: 3, about: '대각선으로 나가는 화살표',
+    rules: [
+      '머리가 비스듬한 화살표는 면 위에서 대각선으로 날아가요.',
+      '대각선으로 지나는 칸들이 비어 있어야 나갈 수 있어요.',
+    ],
     stages: gimmickStages('diagonal', 12, 335, 1.8), seedBase: 21_000_000,
   },
   shoji: {
     name: '일본 · 장지문', tier: 3, about: '레일 칸을 눌러 그 칸의 문을 엶',
+    rules: [
+      '레일 위 세 칸 중 한 칸만 열린 미닫이문이에요. 종이가 붙은 칸(닫힌 문)은 지나갈 수 없어요.',
+      '레일 칸을 누르면 그 칸이 열리고 다른 칸이 닫혀요.',
+    ],
     stages: gimmickStages('shoji', 23, 790, 2.2), seedBase: 22_000_000,
   },
   windmill: {
     name: '네덜란드 · 풍차', tier: 3, about: '축을 눌러 날개를 가로↔세로로 돌림',
+    rules: [
+      '풍차 날개가 놓인 칸은 지나갈 수 없어요.',
+      '가운데 축(갈색)을 누르면 날개가 가로↔세로로 돌아가요.',
+    ],
     stages: gimmickStages('windmill', 19, 1135, 2.1), seedBase: 23_000_000,
   },
 };

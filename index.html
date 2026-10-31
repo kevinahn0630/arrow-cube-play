@@ -131,6 +131,25 @@
   .clear h2 { margin: 0 0 18px; }
   .clear-stars { margin: -8px 0 18px; font-size: 14px; color: var(--muted); }
   .clear-stars:empty { display: none; }
+  /* A world's rules card: the same overlay, the rules as a list. */
+  .intro .card { text-align: left; width: min(360px, calc(100vw - 32px)); min-width: 0; padding: 22px 22px 18px; }
+  .intro-world { margin: 0 0 6px; font-size: 14px; font-weight: 700; color: var(--accent); }
+  /* Two pages side by side in a track that slides; both as tall as the taller one. */
+  .intro-pages { overflow: hidden; margin: 0 -22px; touch-action: pan-y; }
+  .intro-track { display: flex; transition: transform 0.28s ease; }
+  .intro-page { flex: 0 0 100%; padding: 0 22px; box-sizing: border-box; }
+  .intro h2 { margin: 0 0 14px; font-size: 20px; line-height: 1.4; }
+  .intro-rules { margin: 0 0 12px; padding-left: 20px; font-size: 16px; line-height: 1.6; }
+  .intro-rules li + li { margin-top: 10px; }
+  .intro-note { margin: 0 0 12px; font-size: 14px; line-height: 1.55; color: var(--muted); }
+  .intro-note:empty { display: none; }
+  .intro-dots { display: flex; justify-content: center; gap: 8px; margin: 6px 0 14px; }
+  .intro-dots button { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 50%; background: var(--line); }
+  .intro-dots button.on { background: var(--accent); }
+  .intro-buttons { display: flex; gap: 8px; }
+  .intro-buttons .primary { flex: 1; }
+  .intro-buttons button[hidden] { display: none; }
+  .rules-btn { display: block; margin: -6px 2px 14px; padding: 6px 12px; font-size: 13px; }
 
   /* World menu: a sheet with the worlds (countries in tiers), then one world's stages. */
   .overlay {
@@ -260,6 +279,33 @@
     <button id="next">▶</button>
     <button id="solve">자동 풀이</button>
     <button id="panelToggle">⚙ 생성기</button>
+  </div>
+
+  <div class="clear intro" id="intro" hidden>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="introAbout">
+      <p class="intro-world" id="introWorld"></p>
+      <div class="intro-pages" id="introPages">
+        <div class="intro-track" id="introTrack">
+          <section class="intro-page">
+            <h2 id="introAbout"></h2>
+            <ul class="intro-rules" id="introRules1"></ul>
+          </section>
+          <section class="intro-page">
+            <h2>알아 두세요</h2>
+            <ul class="intro-rules" id="introRules2"></ul>
+            <p class="intro-note" id="introNote"></p>
+          </section>
+        </div>
+      </div>
+      <div class="intro-dots" id="introDots">
+        <button aria-label="1쪽"></button>
+        <button aria-label="2쪽"></button>
+      </div>
+      <div class="intro-buttons">
+        <button id="introPrev">이전</button>
+        <button class="primary" id="introNext">다음</button>
+      </div>
+    </div>
   </div>
 
   <div class="clear" id="clear" hidden>

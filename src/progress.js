@@ -40,5 +40,25 @@ export const starsOf = (progress, world) =>
   WORLDS[world].tier ? STAR_AT.filter((n) => clearedCount(progress, world) >= n).length : 0;
 export const totalStars = (progress) => Object.keys(WORLDS).reduce((sum, w) => sum + starsOf(progress, w), 0);
 
+// Worlds whose rules card has been shown on this device (it comes up by itself only
+// the first time their stage 1 opens).
+const INTRO_KEY = 'arrowCube.intro.v1';
+const introsSeen = () => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(INTRO_KEY) ?? '[]'));
+  } catch {
+    return new Set();
+  }
+};
+export const introSeen = (world) => introsSeen().has(world);
+export function markIntroSeen(world) {
+  const seen = introsSeen().add(world);
+  try {
+    localStorage.setItem(INTRO_KEY, JSON.stringify([...seen]));
+  } catch {
+    // Storage full or blocked: the card comes up again next time.
+  }
+}
+
 // Whether a tier of countries is open: enough stars collected.
 export const tierOpen = (progress, tier) => totalStars(progress) >= TIER_STARS[tier];

@@ -4,7 +4,7 @@ import { makeCube, generate, add, scale, cross, axisOf } from './cube.js';
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, darkCell, exitEnd, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
-import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen } from './progress.js';
+import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, introSeen, markIntroSeen } from './progress.js';
 import { STAGE_SEEDS } from './stage-seeds.js';
 import { themeOf } from './themes.js';
 import { scenery } from './scenery.js';
@@ -169,6 +169,7 @@ const game = {
   autoSolved: false, // the auto-solve button was used on this stage: clearing it is not recorded
   thick: 1, // arrows drawn this much bolder where cells are small on screen (cellPixels)
   stuck: false, // the stage is over without a clear (a clocked dead end, or no hearts left); the card starts it over
+  introPage: 0, // the page the rules card is on (0 or 1)
   heartsMax: 0, // wrong taps this stage forgives (country stages from 6 on); 0: no limit
   hearts: 0, // of those, how many are left
 };
@@ -673,6 +674,8 @@ function loadStage(world, stage) {
   game.stage = Math.min(Math.max(stage, 1), count);
   // Stage puzzles are fixed; tools/bake-stages.mjs picks their seeds offline.
   load({ ...preset(world, game.stage), seed: STAGE_SEEDS[world][game.stage - 1].seed });
+  // A world's rules come up by themselves the first time its stage 1 opens.
+  if (game.stage === 1 && !introSeen(world)) showIntro(world);
 }
 
 function loadCustom() {
@@ -1099,6 +1102,36 @@ function hud() {
   $('remain').textContent = game.remaining;
 }
 
+// A world's rules card (stages.js `rules`), in two pages so the lines stay big on a
+// phone: what its gimmick does, then its last line (what to watch for) and, for a
+// country, that hearts start at stage 6. Also opened from the world's stage menu.
+function showIntro(key) {
+  const w = WORLDS[key];
+  const item = (line) => node('li', '', line);
+  $('intro').style.setProperty('--accent', themeOf(key).accent);
+  $('introWorld').textContent = w.name;
+  $('introAbout').textContent = w.about;
+  $('introRules1').replaceChildren(...w.rules.slice(0, -1).map(item));
+  $('introRules2').replaceChildren(...w.rules.slice(-1).map(item));
+  $('introNote').textContent = w.tier ? '6스테이지부터는 하트가 있어요. 막힌 화살표를 누를 때마다 하나씩 줄고, 다 쓰면 처음부터 다시 해요.' : '';
+  introPage(0, false);
+  $('intro').hidden = false;
+  markIntroSeen(key);
+}
+
+// Turns the rules card to page `p` (0 or 1), sliding unless `slide` is false.
+function introPage(p, slide = true) {
+  game.introPage = Math.max(0, Math.min(1, p));
+  const track = $('introTrack');
+  track.style.transition = slide ? '' : 'none';
+  track.style.transform = `translateX(${-100 * game.introPage}%)`;
+  void track.offsetWidth; // apply now, so the next turn slides again
+  track.style.transition = '';
+  [...$('introDots').children].forEach((dot, k) => dot.classList.toggle('on', k === game.introPage));
+  $('introPrev').hidden = !game.introPage;
+  $('introNext').textContent = game.introPage ? '시작하기' : '다음';
+}
+
 // A stage that is over without a clear: the same card says why and offers to start over.
 function showOver(title, why) {
   if (game.cleared) return;
@@ -1224,7 +1257,12 @@ function showStages(key) {
     };
     grid.append(b);
   }
-  body.replaceChildren(about, grid);
+  const rules = node('button', 'rules-btn', '규칙 보기');
+  rules.onclick = () => {
+    closeMenu();
+    showIntro(key);
+  };
+  body.replaceChildren(about, rules, grid);
   body.scrollTop = 0;
   // On a long list, bring the current stage into view.
   grid.querySelector('.current')?.scrollIntoView({ block: 'nearest' });
@@ -1295,6 +1333,17 @@ $('beltR').onclick = () => moveBelt(1);
 $('prev').onclick = () => loadStage(game.lastWorld, game.world === 'free' ? game.stage : game.stage - 1);
 $('next').onclick = () => loadStage(game.lastWorld, game.world === 'free' ? game.stage : game.stage + 1);
 $('retry').onclick = () => load(game.params);
+// The rules card: 다음 / 시작하기, 이전, the dots, and a swipe across the pages.
+$('introNext').onclick = () => (game.introPage ? ($('intro').hidden = true) : introPage(1));
+$('introPrev').onclick = () => introPage(0);
+[...$('introDots').children].forEach((dot, k) => (dot.onclick = () => introPage(k)));
+let swipeFrom = null;
+$('introPages').addEventListener('pointerdown', (e) => (swipeFrom = e.clientX));
+$('introPages').addEventListener('pointerup', (e) => {
+  const dx = swipeFrom === null ? 0 : e.clientX - swipeFrom;
+  swipeFrom = null;
+  if (Math.abs(dx) > 40) introPage(game.introPage + (dx < 0 ? 1 : -1));
+});
 $('solve').onclick = autoSolve;
 $('panelToggle').onclick = () => ($('panel').hidden = !$('panel').hidden);
 $('worldBtn').onclick = openMenu;
