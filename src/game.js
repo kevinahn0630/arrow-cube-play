@@ -4,8 +4,10 @@ import { makeCube, generate, add, scale, cross, axisOf } from './cube.js';
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, darkCell, exitEnd, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
-import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, introSeen, markIntroSeen } from './progress.js';
+import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone } from './progress.js';
 import { STAGE_SEEDS } from './stage-seeds.js';
+import { TUTORIALS, tutorialParams, findTarget, switchHint, lookCell } from './tutorial.js';
+import { TUTORIAL_SEEDS } from './tutorial-seeds.js';
 import { themeOf } from './themes.js';
 import { scenery } from './scenery.js';
 import { wakeAudio, playLeave, playBump, isMuted, setMuted } from './sound.js';
@@ -19,6 +21,7 @@ let COLOR;
 let PALETTE; // key/gate and pair colours, one per link
 let GUARD; // Big Ben's two guard colours
 let AURORA; // aurora arrows and their curtains
+const GLOW = new THREE.Color('#ffc21a'); // the tutorial's lit arrow or switch
 const GIMMICK_DEFAULTS = { N: 8, minLen: 3, maxLen: 9, straight: 0.55, fill: 0.95, block: 1, deep: 0.6, wrap: 0.45, long: 0.4, amount: 0.5 };
 
 const $ = (id) => document.getElementById(id);
@@ -133,6 +136,10 @@ function fadeScenery() {
 const arrowMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
 const decor = new THREE.Mesh(new THREE.BufferGeometry(), arrowMat); // mirrors, guards, gates
 scene.add(decor);
+// The tutorial's lit arrow or switch: a pulsing glow round it.
+const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
+const glow = new THREE.Mesh(new THREE.BufferGeometry(), glowMat);
+scene.add(glow);
 
 // Faces in cube.js order: +x, -x, +y, -y, +z, -z. `facing` is a bitmask of the ones
 // turned toward the camera; things on the others draw as see-through ghosts.
@@ -169,9 +176,13 @@ const game = {
   autoSolved: false, // the auto-solve button was used on this stage: clearing it is not recorded
   thick: 1, // arrows drawn this much bolder where cells are small on screen (cellPixels)
   stuck: false, // the stage is over without a clear (a clocked dead end, or no hearts left); the card starts it over
-  introPage: 0, // the page the rules card is on (0 or 1)
   heartsMax: 0, // wrong taps this stage forgives (country stages from 6 on); 0: no limit
   hearts: 0, // of those, how many are left
+  // The tutorial being played (stage 0 of a world): its steps, the step on now (k), the
+  // arrow each step was about (targets), the arrow lit now (focus, -1 for none), the
+  // switch move lit now (hint) and whether it is between steps (wait).
+  tut: null,
+  turn: null, // the camera turning to show something: { from, to, up, upTo, len, t0 }
 };
 
 function world(p) {
@@ -297,14 +308,17 @@ function colorOf(ar, face) {
   return ar.hue >= 0 ? PALETTE[ar.hue % PALETTE.length] : COLOR.front;
 }
 
-function drawArrow(ar) {
+// With `lit`, draws the tutorial's glow round the arrow instead: the same shape,
+// lit.widen times as wide and just under it, added to lit.pos / lit.col.
+function drawArrow(ar, lit = null) {
   const cs = S / game.puz.cube.N;
   // Same stroke on every grid size; only very dense grids go thinner.
   // Lines and heads half as thick again as at first (BOLD), bolder still on small cells.
-  const hw = Math.min(cs * 0.085 * BOLD * game.thick, 0.04 * BOLD);
-  const eps = S * 0.004;
-  const pos = [];
-  const col = [];
+  const line = Math.min(cs * 0.085 * BOLD * game.thick, 0.04 * BOLD);
+  const hw = lit ? line * lit.widen : line;
+  const eps = S * (lit ? 0.0016 : 0.004);
+  const pos = lit?.pos ?? [];
+  const col = lit?.col ?? [];
 
   // Nothing but lanterns shows where it lies in the dark. Whether point p (doubled
   // coordinates) on track segment sg is in the dark:
@@ -321,7 +335,7 @@ function drawArrow(ar) {
   let headColor = COLOR.front;
   for (let i = 0; i < segIdx.length; i++) {
     const sg = tr.segs[segIdx[i]];
-    headColor = colorOf(ar, sg.face);
+    headColor = lit ? GLOW : colorOf(ar, sg.face);
     if (sg.hidden) continue;
     const A = out[i].p;
     const B = out[i + 1].p;
@@ -349,7 +363,7 @@ function drawArrow(ar) {
   // Underground in a tunnel, or in the dark: no head either.
   const lastSeg = tr.segs[segIdx.at(-1)];
   if (lastSeg.hidden || inShadow(out.at(-1).p, lastSeg)) {
-    setGeometry(ar.mesh, pos, col);
+    if (!lit) setGeometry(ar.mesh, pos, col);
     return;
   }
 
@@ -363,7 +377,7 @@ function drawArrow(ar) {
   const n = new THREE.Vector3(...tr.headN);
   const side = new THREE.Vector3().crossVectors(n, d);
   // No wider than a cell, so heads side by side do not run into each other.
-  const a = Math.min(cs * (0.32 + 0.13 * (game.thick - 1)) * BOLD, cs * 0.5, hw * 4.5);
+  const a = Math.min(cs * (0.32 + 0.13 * (game.thick - 1)) * BOLD, cs * 0.5, line * 4.5) * (lit ? 1 + 0.3 * (lit.widen - 1) : 1);
   const o = n.multiplyScalar(eps * 1.5);
   // A head-shaped triangle at `at` pointing along dir, k times the usual size.
   const triangle = (at, dir, sideV, k = 1) => {
@@ -415,7 +429,7 @@ function drawArrow(ar) {
     const end = H.clone().addScaledVector(d, a * 0.5).addScaledVector(back, 2 * r);
     triangle(end.addScaledVector(d, -a * 0.6 * 0.45), d.clone().negate(), back, 0.45);
   }
-  setGeometry(ar.mesh, pos, col);
+  if (!lit) setGeometry(ar.mesh, pos, col);
 }
 
 // Mirrors, guard tiles (filled when shut, outlined when open), gates still shut,
@@ -659,6 +673,10 @@ function load(params) {
 
   $('beltL').hidden = $('beltR').hidden = !puz.belt;
   game.stuck = false;
+  game.tut = null;
+  game.turn = null;
+  game.beltHintUntil = 0;
+  $('guide').hidden = true;
   game.heartsMax = game.hearts = params.hearts ?? 0;
   syncPanel(params);
   refreshFree();
@@ -671,12 +689,16 @@ function load(params) {
 function loadStage(world, stage) {
   const count = WORLDS[world].stages.length;
   game.world = game.lastWorld = world;
-  game.stage = Math.min(Math.max(stage, 1), count);
+  // Stage 0 is the world's tutorial, which stage 1 opens instead until it is done.
+  game.stage = Math.min(Math.max(stage, 0), count);
+  if (game.stage === 1 && !tutorialDone(world)) game.stage = 0;
+  if (!game.stage) return loadTutorial(world);
   // Stage puzzles are fixed; tools/bake-stages.mjs picks their seeds offline.
   load({ ...preset(world, game.stage), seed: STAGE_SEEDS[world][game.stage - 1].seed });
-  // A world's rules come up by themselves the first time its stage 1 opens.
-  if (game.stage === 1 && !introSeen(world)) showIntro(world);
 }
+
+// Starts the stage on now over; a tutorial from its first step.
+const restart = () => (game.tut ? loadTutorial(game.world) : load(game.params));
 
 function loadCustom() {
   game.world = 'free';
@@ -689,6 +711,8 @@ function tap(ar) {
   if (!ar || ar.state === 'exiting' || ar.state === 'gone') return;
   // With no hearts left the stage is over.
   if (game.heartsMax && game.hearts <= 0) return;
+  // A tutorial step about one arrow takes taps on that one only.
+  if (!tutAllows(ar)) return nudgeGuide();
   const { puz, state } = game;
   const members = group(puz, ar.index).map((j) => game.arrows[j]);
   if (canExit(puz, state, ar.index)) {
@@ -717,6 +741,7 @@ function tap(ar) {
     if (game.showFree || out.some((a) => a.lantern)) redrawAll();
     if (out.some((a) => a.gates.length || a.tint >= 0 || a.slot >= 0 || a.disc)) drawDecor();
     hud();
+    tutDid('leave', ar.index);
     // A clocked switch has moved on: the shadows, guards and dial arrows follow, and
     // if nothing can leave now the stage is stuck for good.
     if (clocked(puz)) {
@@ -739,6 +764,7 @@ function tap(ar) {
     ar.rest = ar.track.cellAt[state.ran[ar.index]];
     playLeave(1, 0.5);
     refreshFree();
+    tutDid('charge', ar.index);
     return;
   }
   // Blocked: every member slides up to whatever is in its way and back. A pair
@@ -756,6 +782,7 @@ function tap(ar) {
   }
   playBump();
   loseHeart();
+  tutDid('bump', ar.index);
   if (puz.belt && !game.arrows.some((a) => a.state === 'idle' && a.free)) game.beltHintUntil = now + 1600;
 }
 
@@ -794,6 +821,7 @@ function slideDoor(d, j) {
   game.state.doors[d] = j;
   refreshFree();
   redrawAll();
+  tutDid('switch');
 }
 
 // Swing windmill m's sails round to the other axis.
@@ -801,6 +829,7 @@ function turnMill(m) {
   game.state.mills[m] = 1 - game.state.mills[m];
   refreshFree();
   redrawAll();
+  tutDid('switch');
 }
 
 // What a tap at a screen point works, if it lands on a shoji track or a windmill hub:
@@ -886,6 +915,7 @@ function pick(x, y) {
   const R = Math.ceil(reach);
   let best = null;
   let bestD = reach;
+  let lit = null; // the tutorial's lit arrow, taken over a nearer one when within reach
   for (let i = ib - R; i <= ib + R; i++) {
     for (let j = ic - R; j <= ic + R; j++) {
       if (i < 0 || j < 0 || i >= N || j >= N) continue;
@@ -896,13 +926,14 @@ function pick(x, y) {
       // What lies in the dark cannot be seen, so cannot be tapped there (lanterns can).
       if (!game.arrows[owner].lantern && darkCell(game.puz, game.state, cell)) continue;
       const dist = Math.hypot(d[b] - p[b], d[c] - p[c]) / 2;
+      if (owner === game.tut?.focus && dist < reach) lit = game.arrows[owner];
       if (dist < bestD) {
         bestD = dist;
         best = game.arrows[owner];
       }
     }
   }
-  return best;
+  return lit ?? best;
 }
 
 // Belt slot under a screen point, or undefined.
@@ -943,7 +974,7 @@ renderer.domElement.addEventListener(
   (e) => {
     if (!e.isPrimary) return;
     const p = beltSlotAt(e.clientX, e.clientY);
-    if (p === undefined) return;
+    if (p === undefined || !tutSwitchOk()) return;
     controls.enabled = false;
     beltDrag = { x: e.clientX, y: e.clientY, v: beltStepOnScreen(p), steps: 0 };
     renderer.domElement.style.cursor = 'grabbing';
@@ -965,9 +996,11 @@ renderer.domElement.addEventListener('pointermove', (e) => {
 });
 const endBeltDrag = () => {
   if (!beltDrag) return;
+  const moved = beltDrag.steps !== 0;
   beltDrag = null;
   controls.enabled = true;
   renderer.domElement.style.cursor = 'grab';
+  if (moved) tutDid('switch');
 };
 window.addEventListener('pointerup', endBeltDrag);
 window.addEventListener('pointercancel', endBeltDrag);
@@ -976,6 +1009,7 @@ window.addEventListener('pointerdown', wakeAudio, true);
 
 let down = null;
 renderer.domElement.addEventListener('pointerdown', (e) => {
+  game.turn = null;
   if (e.isPrimary) down = { x: e.clientX, y: e.clientY, t: performance.now(), multi: false };
   else if (down) down.multi = true;
 });
@@ -984,7 +1018,8 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
   if (!down.multi && moved < 8 && performance.now() - down.t < 450) {
     const flip = switchAt(e.clientX, e.clientY);
-    if (flip) flip();
+    if (flip && !tutSwitchOk()) nudgeGuide();
+    else if (flip) flip();
     else tap(pick(e.clientX, e.clientY));
   }
   down = null;
@@ -1022,12 +1057,174 @@ function autoSolve() {
   next();
 }
 
+// ---------- tutorial
+
+// A world's tutorial (stage 0): a small puzzle (tools/bake-tutorials.mjs) played step by
+// step (tutorial.js) with the guide box under the cube.
+function loadTutorial(world) {
+  load(tutorialParams(world, TUTORIAL_SEEDS[world]));
+  // From the starting view, so the turns to what each step is about are easy to follow.
+  camera.position.copy(HOME_VIEW);
+  camera.up.set(0, 1, 0);
+  game.tut = { steps: TUTORIALS[world].steps, k: 0, targets: [], focus: -1, hint: null, wait: false };
+  $('guide').style.setProperty('--accent', themeOf(world).accent);
+  tutStep(0);
+}
+
+// The arrows still on the cube.
+const aliveNow = () =>
+  new Set(game.arrows.filter((a) => a.state === 'idle' || a.state === 'bumping' || a.state === 'charging').map((a) => a.index));
+
+// Starts tutorial step k: the guide says it, the arrow it is about lights up (or the
+// switch move to make, or the arrow the belt is to bring round) and the cube turns to
+// show it, or the tile the step talks about.
+function tutStep(k) {
+  const tut = game.tut;
+  const step = tut.steps[k];
+  const { puz, state } = game;
+  Object.assign(tut, { k, focus: -1, hint: null, wait: false });
+  if (step.find) tut.focus = findTarget(puz, state, aliveNow(), step.find, tut.targets);
+  if (step.until === 'switch') {
+    tut.hint = switchHint(puz, state, aliveNow(), tut.steps[k + 1].find, tut.targets);
+    if (step.mark !== undefined) tut.focus = tut.targets[step.mark];
+    // The belt glows until it moves.
+    if (puz.belt) game.beltHintUntil = Infinity;
+  }
+  const cell = step.look ? lookCell(puz, step.look) : (tut.hint?.cell ?? (tut.focus >= 0 ? pose(puz, state, tut.focus).cells.at(-1) : undefined));
+  if (cell !== undefined) turnTo(cell);
+  $('guideStep').textContent = `튜토리얼 ${k + 1} / ${tut.steps.length}`;
+  $('guideText').textContent = step.say;
+  $('guideNext').hidden = step.until !== 'next';
+  $('guide').hidden = false;
+}
+
+// Whether a tap on arrow ar counts now: in a step about one arrow only that one (or its
+// pair) does, and none while the guide is only saying something or wants a switch
+// moved. The last step (free play) and auto-solve take any.
+function tutAllows(ar) {
+  const tut = game.tut;
+  if (!tut || game.autoSolved || game.cleared) return true;
+  const step = tut.steps[tut.k];
+  if (step.until === 'clear' && !tut.wait) return true;
+  return !tut.wait && !!step.find && tut.focus >= 0 && group(game.puz, tut.focus).includes(ar.index);
+}
+
+// Whether the belt, doors and windmills may move now: in a step that asks for it and in
+// the last one, so the arrow a step lights up stays the one it means.
+function tutSwitchOk() {
+  const tut = game.tut;
+  if (!tut || game.autoSolved) return true;
+  const { until } = tut.steps[tut.k];
+  return !tut.wait && (until === 'switch' || until === 'clear');
+}
+
+// The player did something (`what` as a step's `until`, to arrow i): on to the next
+// step if it is what this one waits for, after a moment to see what it did and once a
+// bumped arrow is back (the belt cannot move before) or a bull has stopped. A switch
+// step goes on once the move lets the next step find its arrow; until then it lights
+// the move that would.
+function tutDid(what, i = -1) {
+  const tut = game.tut;
+  if (!tut || tut.wait || game.autoSolved) return;
+  const step = tut.steps[tut.k];
+  if (step.until !== what) return;
+  if (what === 'switch') {
+    const next = tut.steps[tut.k + 1].find;
+    if (findTarget(game.puz, game.state, aliveNow(), next, tut.targets) < 0) {
+      tut.hint = switchHint(game.puz, game.state, aliveNow(), next, tut.targets);
+      return;
+    }
+  } else if (tut.focus < 0 || !group(game.puz, tut.focus).includes(i)) {
+    return;
+  }
+  tut.targets[tut.k] = what === 'switch' ? -1 : tut.focus;
+  Object.assign(tut, { wait: true, focus: -1, hint: null });
+  const next = () => {
+    if (tut !== game.tut || game.stuck) return;
+    if (game.arrows.some((a) => a.state === 'bumping' || a.state === 'charging')) return setTimeout(next, 100);
+    tutStep(tut.k + 1);
+  };
+  setTimeout(next, 700);
+}
+
+// The guide box shakes: that is not what the step asks for.
+function nudgeGuide() {
+  const el = $('guide');
+  if (el.hidden) return;
+  el.classList.remove('nudge');
+  void el.offsetWidth; // restart the shake
+  el.classList.add('nudge');
+}
+
+// Turns the camera round the cube, keeping its distance, until cell's face is in plain
+// view (unless it already is), the cube upright on screen where the view allows.
+// frame() moves it there over a moment.
+function turnTo(cell) {
+  const n = new THREE.Vector3(...game.puz.cube.cells[cell].n);
+  const from = camera.position.clone().normalize();
+  if (from.dot(n) > 0.55) return;
+  const side = from.clone().addScaledVector(n, -from.dot(n));
+  if (side.lengthSq() < 1e-4) side.copy(camera.up).addScaledVector(n, -camera.up.dot(n));
+  if (side.lengthSq() < 1e-4) side.set(n.y, n.z, n.x);
+  const to = n.clone().addScaledVector(side.normalize(), 0.7).normalize();
+  const sky = new THREE.Vector3(0, 1, 0);
+  const upTo =
+    Math.abs(to.dot(sky)) < 0.9
+      ? sky.addScaledVector(to, -to.dot(sky)).normalize()
+      : camera.up.clone().applyQuaternion(new THREE.Quaternion().setFromUnitVectors(from, to));
+  game.turn = { from, to, up: camera.up.clone(), upTo, len: camera.position.length(), t0: performance.now() };
+}
+
+function turnCamera(now) {
+  const t = game.turn;
+  if (!t) return;
+  const u = Math.min(1, (now - t.t0) / 700);
+  const k = u * u * (3 - 2 * u);
+  const along = (a, b) => new THREE.Quaternion().slerp(new THREE.Quaternion().setFromUnitVectors(a, b), k);
+  camera.position.copy(t.from).applyQuaternion(along(t.from, t.to)).multiplyScalar(t.len);
+  camera.up.copy(t.up).applyQuaternion(along(t.up, t.upTo));
+  if (u >= 1) game.turn = null;
+}
+
+// The tutorial's lit arrow, or the door or windmill hub to tap, glows and pulses.
+function drawGlow(now) {
+  const tut = game.tut;
+  const ar = tut && tut.focus >= 0 ? game.arrows[tut.focus] : null;
+  const lit = ar && (ar.state === 'idle' || ar.state === 'bumping' || ar.state === 'charging') ? ar : null;
+  const cell = tut?.hint?.cell;
+  glow.visible = !!lit || cell !== undefined;
+  if (!glow.visible) return;
+  const pulse = 0.5 + 0.5 * Math.sin(now / 170);
+  glowMat.opacity = 0.3 + 0.45 * pulse;
+  const pos = [];
+  const col = [];
+  if (lit) drawArrow(lit, { pos, col, widen: 2.6 + 0.9 * pulse });
+  if (cell !== undefined) {
+    const cs = S / game.puz.cube.N;
+    const { p, n } = game.puz.cube.cells[cell];
+    const t0 = game.puz.cube.tangents(cell)[0];
+    const C = world(p);
+    const u = new THREE.Vector3(...t0);
+    const v = new THREE.Vector3(...cross(n, t0));
+    const half = cs * (0.46 + 0.06 * pulse);
+    const w = cs * 0.08;
+    for (const [a, b] of [[u, v], [v, u]]) {
+      for (const sgn of [1, -1]) {
+        const mid = C.clone().addScaledVector(b, sgn * half);
+        strip(pos, col, mid.clone().addScaledVector(a, -half - w), mid.clone().addScaledVector(a, half + w), n, w, S * 0.006, GLOW);
+      }
+    }
+  }
+  setGeometry(glow, pos, col);
+}
+
 // ---------- frame loop
 
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  turnCamera(now);
   controls.update();
 
   const m = facingMask();
@@ -1080,6 +1277,8 @@ function frame(now) {
     }
   }
 
+  drawGlow(now);
+
   if (!game.cleared && game.remaining === 0 && game.arrows.every((a) => a.state === 'gone')) {
     game.cleared = true;
     showClear();
@@ -1097,39 +1296,9 @@ function hud() {
     $('stageLabel').textContent = `시드 ${game.params.seed}`;
   } else {
     $('world').textContent = WORLDS[game.world].name;
-    $('stageLabel').textContent = `스테이지 ${game.stage} / ${WORLDS[game.world].stages.length} ▾`;
+    $('stageLabel').textContent = game.stage ? `스테이지 ${game.stage} / ${WORLDS[game.world].stages.length} ▾` : '튜토리얼 ▾';
   }
   $('remain').textContent = game.remaining;
-}
-
-// A world's rules card (stages.js `rules`), in two pages so the lines stay big on a
-// phone: what its gimmick does, then its last line (what to watch for) and, for a
-// country, that hearts start at stage 6. Also opened from the world's stage menu.
-function showIntro(key) {
-  const w = WORLDS[key];
-  const item = (line) => node('li', '', line);
-  $('intro').style.setProperty('--accent', themeOf(key).accent);
-  $('introWorld').textContent = w.name;
-  $('introAbout').textContent = w.about;
-  $('introRules1').replaceChildren(...w.rules.slice(0, -1).map(item));
-  $('introRules2').replaceChildren(...w.rules.slice(-1).map(item));
-  $('introNote').textContent = w.tier ? '6스테이지부터는 하트가 있어요. 막힌 화살표를 누를 때마다 하나씩 줄고, 다 쓰면 처음부터 다시 해요.' : '';
-  introPage(0, false);
-  $('intro').hidden = false;
-  markIntroSeen(key);
-}
-
-// Turns the rules card to page `p` (0 or 1), sliding unless `slide` is false.
-function introPage(p, slide = true) {
-  game.introPage = Math.max(0, Math.min(1, p));
-  const track = $('introTrack');
-  track.style.transition = slide ? '' : 'none';
-  track.style.transform = `translateX(${-100 * game.introPage}%)`;
-  void track.offsetWidth; // apply now, so the next turn slides again
-  track.style.transition = '';
-  [...$('introDots').children].forEach((dot, k) => dot.classList.toggle('on', k === game.introPage));
-  $('introPrev').hidden = !game.introPage;
-  $('introNext').textContent = game.introPage ? '시작하기' : '다음';
 }
 
 // A stage that is over without a clear: the same card says why and offers to start over.
@@ -1149,6 +1318,7 @@ const showNoHearts = () => showOver('하트를 다 썼어요', '막힌 화살표
 // The clear card. A world stage cleared by hand is recorded; the card says where the
 // world stands, and when a star was just earned.
 function showClear() {
+  if (game.tut) return showTutorialDone();
   const inWorld = game.world !== 'free';
   const w = WORLDS[game.world];
   const last = inWorld && game.stage === w.stages.length;
@@ -1165,6 +1335,19 @@ function showClear() {
   $('clearTitle').textContent = last ? `${w.name} 완료!` : '스테이지 클리어!';
   $('clearStars').textContent = note;
   $('clearNext').textContent = !inWorld ? '새 퍼즐' : last ? '처음부터' : '다음 스테이지';
+  $('clear').hidden = false;
+}
+
+// A tutorial played through: noted on the device, so stage 1 opens from now on. A
+// country's card says that hearts start at stage 6.
+function showTutorialDone() {
+  if (!game.autoSolved) markTutorialDone(game.world);
+  $('guide').hidden = true;
+  $('clearTitle').textContent = '튜토리얼 완료!';
+  $('clearStars').textContent = WORLDS[game.world].tier
+    ? '6스테이지부터는 하트가 있어요. 막힌 화살표를 누를 때마다 하나씩 줄고, 다 쓰면 처음부터 다시 해요.'
+    : '';
+  $('clearNext').textContent = '1스테이지 시작';
   $('clear').hidden = false;
 }
 
@@ -1257,12 +1440,15 @@ function showStages(key) {
     };
     grid.append(b);
   }
-  const rules = node('button', 'rules-btn', '규칙 보기');
-  rules.onclick = () => {
+  // The tutorial comes before stage 1, and can be played again any time.
+  const done = tutorialDone(key);
+  const tutorial = node('button', `tutorial-btn${done ? ' done' : ''}${key === game.world && game.stage === 0 ? ' current' : ''}`, done ? '튜토리얼 ✓' : '튜토리얼');
+  tutorial.setAttribute('aria-label', `튜토리얼${done ? ', 끝냄' : ''}`);
+  tutorial.onclick = () => {
     closeMenu();
-    showIntro(key);
+    loadStage(key, 0);
   };
-  body.replaceChildren(about, rules, grid);
+  body.replaceChildren(about, tutorial, grid);
   body.scrollTop = 0;
   // On a long list, bring the current stage into view.
   grid.querySelector('.current')?.scrollIntoView({ block: 'nearest' });
@@ -1327,23 +1513,29 @@ $('showFree').onchange = (e) => {
   refreshFree();
   redrawAll();
 };
-$('beltL').onclick = () => moveBelt(-1);
-$('beltR').onclick = () => moveBelt(1);
+// The belt buttons turn it one step, when the tutorial lets switches move.
+const beltButton = (d) => () => {
+  if (!tutSwitchOk()) return nudgeGuide();
+  if (moveBelt(d)) tutDid('switch');
+};
+$('beltL').onclick = beltButton(-1);
+$('beltR').onclick = beltButton(1);
 // ◀ ▶ step through the current world; from the generator they return to the last world.
 $('prev').onclick = () => loadStage(game.lastWorld, game.world === 'free' ? game.stage : game.stage - 1);
 $('next').onclick = () => loadStage(game.lastWorld, game.world === 'free' ? game.stage : game.stage + 1);
-$('retry').onclick = () => load(game.params);
-// The rules card: 다음 / 시작하기, 이전, the dots, and a swipe across the pages.
-$('introNext').onclick = () => (game.introPage ? ($('intro').hidden = true) : introPage(1));
-$('introPrev').onclick = () => introPage(0);
-[...$('introDots').children].forEach((dot, k) => (dot.onclick = () => introPage(k)));
-let swipeFrom = null;
-$('introPages').addEventListener('pointerdown', (e) => (swipeFrom = e.clientX));
-$('introPages').addEventListener('pointerup', (e) => {
-  const dx = swipeFrom === null ? 0 : e.clientX - swipeFrom;
-  swipeFrom = null;
-  if (Math.abs(dx) > 40) introPage(game.introPage + (dx < 0 ? 1 : -1));
-});
+$('retry').onclick = restart;
+// The guide box: 다음 on a step that only says something, and 건너뛰기, which counts the
+// tutorial as done and goes to stage 1.
+$('guideNext').onclick = () => {
+  const tut = game.tut;
+  if (!tut || tut.wait || tut.steps[tut.k].until !== 'next') return;
+  tut.targets[tut.k] = -1;
+  tutStep(tut.k + 1);
+};
+$('guideSkip').onclick = () => {
+  markTutorialDone(game.world);
+  loadStage(game.world, 1);
+};
 $('solve').onclick = autoSolve;
 $('panelToggle').onclick = () => ($('panel').hidden = !$('panel').hidden);
 $('worldBtn').onclick = openMenu;
@@ -1359,7 +1551,7 @@ for (const key of [...COUNTRIES].sort((a, b) => WORLDS[a].tier - WORLDS[b].tier)
 }
 $('clearNext').onclick = () => {
   if (game.stuck) {
-    load(game.params);
+    restart();
   } else if (game.world === 'free') {
     $('seed').value = Number($('seed').value) + 1;
     loadCustom();

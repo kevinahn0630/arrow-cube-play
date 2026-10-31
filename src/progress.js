@@ -40,23 +40,23 @@ export const starsOf = (progress, world) =>
   WORLDS[world].tier ? STAR_AT.filter((n) => clearedCount(progress, world) >= n).length : 0;
 export const totalStars = (progress) => Object.keys(WORLDS).reduce((sum, w) => sum + starsOf(progress, w), 0);
 
-// Worlds whose rules card has been shown on this device (it comes up by itself only
-// the first time their stage 1 opens).
-const INTRO_KEY = 'arrowCube.intro.v1';
-const introsSeen = () => {
+// Worlds whose tutorial (stage 0) has been played through or skipped on this device;
+// until then their stage 1 opens the tutorial instead.
+const TUTORIAL_KEY = 'arrowCube.tutorial.v1';
+const tutorialsDone = () => {
   try {
-    return new Set(JSON.parse(localStorage.getItem(INTRO_KEY) ?? '[]'));
+    return new Set(JSON.parse(localStorage.getItem(TUTORIAL_KEY) ?? '[]'));
   } catch {
     return new Set();
   }
 };
-export const introSeen = (world) => introsSeen().has(world);
-export function markIntroSeen(world) {
-  const seen = introsSeen().add(world);
+export const tutorialDone = (world) => tutorialsDone().has(world);
+export function markTutorialDone(world) {
+  const done = tutorialsDone().add(world);
   try {
-    localStorage.setItem(INTRO_KEY, JSON.stringify([...seen]));
+    localStorage.setItem(TUTORIAL_KEY, JSON.stringify([...done]));
   } catch {
-    // Storage full or blocked: the card comes up again next time.
+    // Storage full or blocked: the tutorial comes up again next time.
   }
 }
 
