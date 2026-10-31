@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Arrow Cube 프로토타입</title>
+<!-- Added to a phone's home screen, it opens full screen like an app. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Arrow Cube">
+<meta name="theme-color" content="#5b6cff">
+<style>
+  :root {
+    --bg1: #eef1ff;
+    --bg2: #dce4fa;
+    --ink: #1f2a4d;
+    --muted: #6b7599;
+    --accent: #5b6cff;
+    --card: #ffffffe0;
+    --line: #d5dbf3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(180deg, var(--bg1), var(--bg2));
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #scenery { position: fixed; inset: 0; pointer-events: none; }
+  #scenery svg { display: block; width: 100%; height: 100%; }
+  #stage { position: fixed; inset: 0; touch-action: none; }
+  #stage canvas { display: block; }
+  .pill {
+    background: var(--card);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 4px 16px #2a3a8014;
+  }
+  .hud {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    pointer-events: none;
+  }
+  .title { padding: 8px 14px; text-align: left; pointer-events: auto; }
+  .title b { display: block; font-size: 15px; }
+  .title span { font-size: 12px; color: var(--muted); }
+  .count { padding: 6px 14px; font-size: 22px; font-weight: 800; color: var(--accent); }
+  .hud-right { display: flex; align-items: center; gap: 8px; }
+  .hearts { padding: 6px 12px; font-size: 20px; line-height: 1.35; color: #e5484d; letter-spacing: 2px; }
+  .hearts i { font-style: normal; color: var(--muted); opacity: 0.4; }
+  .hearts.lost { animation: shake 0.4s; }
+  /* The build players get (src/build.js): no ◀ 다시 ▶, auto-solve, generator or zoom buttons. */
+  .release .bar, .release #panel, .release #zoomIn, .release #zoomOut, .release #resetView { display: none !important; }
+  @keyframes shake {
+    20%, 60% { transform: translateX(-4px); }
+    40%, 80% { transform: translateX(4px); }
+  }
+  button {
+    font: inherit;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+  button:active { transform: translateY(1px); }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .zoom {
+    position: fixed;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .zoom button { width: 44px; height: 44px; padding: 0; font-size: 20px; }
+  .bar {
+    position: fixed;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .panel {
+    position: fixed;
+    left: 16px;
+    bottom: 76px;
+    width: min(340px, calc(100% - 32px));
+    max-height: calc(100% - 180px);
+    overflow: auto;
+    padding: 14px 16px;
+  }
+  .panel[hidden], .clear[hidden] { display: none; }
+  .panel h3 { margin: 0 0 10px; font-size: 15px; }
+  .row { margin: 8px 0; }
+  .row label { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .row output { color: var(--ink); font-weight: 600; }
+  .row input[type=range] { width: 100%; accent-color: var(--accent); }
+  .row select { width: 100%; margin-top: 4px; font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); }
+  .seed { display: flex; gap: 8px; align-items: center; }
+  .seed input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 13px; margin: 10px 0; }
+  .stats { font-size: 12px; color: var(--muted); margin: 10px 0 0; line-height: 1.5; white-space: pre-line; }
+  #gen { width: 100%; }
+  .clear {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: #1f2a4d55;
+  }
+  .clear .card { background: #fff; border-radius: 20px; padding: 28px 32px; text-align: center; min-width: 240px; }
+  .clear h2 { margin: 0 0 18px; }
+  .clear-stars { margin: -8px 0 18px; font-size: 14px; color: var(--muted); }
+  .clear-stars:empty { display: none; }
+
+  /* World menu: a sheet with the worlds (countries in tiers), then one world's stages. */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: #1f2a4d66;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  }
+  .overlay[hidden] { display: none; }
+  .sheet {
+    width: min(560px, 100%);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #f6f7fe;
+    border-radius: 22px;
+    box-shadow: 0 18px 50px #1f2a4d40;
+    overflow: hidden;
+  }
+  .sheet-head { display: flex; align-items: center; gap: 10px; padding: 14px 14px 12px; background: #fff; border-bottom: 1px solid var(--line); }
+  .sheet-title { flex: 1; min-width: 0; }
+  .sheet-title b { display: block; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sheet-title span { font-size: 12px; color: var(--muted); }
+  .icon { width: 40px; height: 40px; padding: 0; font-size: 18px; flex: none; }
+  .icon[hidden] { display: none; }
+  .sheet-body { overflow: auto; padding: 14px 14px 20px; overscroll-behavior: contain; }
+  .stars { color: #e3a21a; letter-spacing: 1px; }
+  .tier { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 20px 2px 10px; }
+  .tier b { font-size: 13px; color: var(--ink); }
+  .tier span { font-size: 12px; color: var(--muted); text-align: right; }
+  .world-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .world-card {
+    position: relative;
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 12px 12px 10px 17px;
+    border-radius: 14px;
+    background: #fff;
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .world-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--accent); }
+  .world-card.current { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .world-card.locked { opacity: 0.6; }
+  .wc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .wc-name { font-weight: 800; font-size: 15px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wc-top .stars { flex: none; font-size: 13px; }
+  .wc-gimmick { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .wc-bar { display: block; height: 5px; border-radius: 3px; background: #e8ebf8; margin-top: 10px; overflow: hidden; }
+  .wc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .wc-count { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; text-align: right; }
+  .about { font-size: 13px; color: var(--muted); margin: 0 2px 14px; line-height: 1.5; }
+  .stage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; }
+  .stage {
+    position: relative;
+    aspect-ratio: 1;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .stage.cleared { background: var(--accent); color: #fff; border-color: transparent; }
+  .stage.current { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .stage .mark { position: absolute; top: -7px; right: -5px; font-size: 13px; color: #e3a21a; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+</style>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.min.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+</script>
+</head>
+<body>
+  <div id="scenery" aria-hidden="true"></div>
+  <div id="stage"></div>
+
+  <div class="hud">
+    <button class="pill title" id="worldBtn" title="월드·스테이지 선택"><b id="world">🏠 집 안</b><span id="stageLabel"></span></button>
+    <div class="hud-right">
+      <div class="pill hearts" id="hearts" hidden></div>
+      <div class="pill count">↑ <span id="remain">0</span></div>
+    </div>
+  </div>
+
+  <div class="zoom">
+    <button id="zoomIn" title="확대">＋</button>
+    <button id="zoomOut" title="축소">－</button>
+    <button id="resetView" title="시점 초기화">⟲</button>
+    <button id="sound" title="효과음 끄기">🔊</button>
+    <button id="beltL" title="벨트를 왼쪽으로 한 칸" hidden>◁</button>
+    <button id="beltR" title="벨트를 오른쪽으로 한 칸" hidden>▷</button>
+  </div>
+
+  <div class="panel pill" id="panel" hidden>
+    <h3>퍼즐 생성기</h3>
+    <div class="row">
+      <label>기믹</label>
+      <select id="gimmick">
+        <option value="">없음</option>
+      </select>
+    </div>
+    <div class="row"><label>기믹 양 <output id="o_amount"></output></label><input type="range" id="amount" min="0" max="100"></div>
+    <div class="row"><label>격자 크기 (한 면 N×N) <output id="o_N"></output></label><input type="range" id="N" min="3" max="16"></div>
+    <div class="row"><label>화살표 최소 길이 <output id="o_minLen"></output></label><input type="range" id="minLen" min="2" max="10"></div>
+    <div class="row"><label>화살표 최대 길이 <output id="o_maxLen"></output></label><input type="range" id="maxLen" min="2" max="40"></div>
+    <div class="row"><label>직진 확률 (낮을수록 많이 꺾임) <output id="o_straight"></output></label><input type="range" id="straight" min="0" max="100"></div>
+    <div class="row"><label>채움 목표 <output id="o_fill"></output></label><input type="range" id="fill" min="30" max="100"></div>
+    <div class="row"><label>막기 강도 (높을수록 서로 길을 막음) <output id="o_block"></output></label><input type="range" id="block" min="0" max="100"></div>
+    <div class="row"><label>의존 깊이 (높을수록 여러 면에 걸쳐 길게 기다림) <output id="o_deep"></output></label><input type="range" id="deep" min="0" max="100"></div>
+    <div class="row"><label>면 걸침 (높을수록 모서리를 많이 넘음) <output id="o_wrap"></output></label><input type="range" id="wrap" min="0" max="100"></div>
+    <div class="row"><label>긴 화살표 선호 (높을수록 짧은 화살표가 적음) <output id="o_long"></output></label><input type="range" id="long" min="0" max="100"></div>
+    <div class="row seed"><label>시드</label><input type="number" id="seed" min="1"><button id="dice" title="무작위 시드">🎲</button></div>
+    <label class="check"><input type="checkbox" id="showFree"> 지금 뺄 수 있는 화살표 표시</label>
+    <button class="primary" id="gen">이 설정으로 생성</button>
+    <p class="stats" id="stats"></p>
+  </div>
+
+  <div class="bar">
+    <button id="prev">◀</button>
+    <button id="retry">다시</button>
+    <button id="next">▶</button>
+    <button id="solve">자동 풀이</button>
+    <button id="panelToggle">⚙ 생성기</button>
+  </div>
+
+  <div class="clear" id="clear" hidden>
+    <div class="card">
+      <h2 id="clearTitle">스테이지 클리어!</h2>
+      <p class="clear-stars" id="clearStars"></p>
+      <button class="primary" id="clearNext">다음 스테이지</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="menu" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+      <header class="sheet-head">
+        <button class="icon" id="menuBack" aria-label="월드 목록으로" hidden>‹</button>
+        <div class="sheet-title"><b id="menuTitle">월드</b><span id="menuSub"></span></div>
+        <button class="icon" id="menuClose" aria-label="닫기">✕</button>
+      </header>
+      <div class="sheet-body" id="menuBody"></div>
+    </section>
+  </div>
+
+  <script type="module" src="src/game.js"></script>
+</body>
+</html>

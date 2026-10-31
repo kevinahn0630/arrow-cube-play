@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App icon: the cube with arrows on its faces, on the home world's indigo. Full
+       bleed (iOS and Android round the corners themselves); the cube stays inside the
+       middle 80% so masks never cut it. The PNGs next to it are this, drawn onto a
+       canvas in a browser at 512, 192 and 180 px. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7684ff"/>
+      <stop offset="1" stop-color="#4654e0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g stroke-linejoin="round">
+    <!-- faces: top, left, right -->
+    <path d="M256 92 L408 180 L256 268 L104 180 Z" fill="#ffffff"/>
+    <path d="M104 180 L256 268 L256 444 L104 356 Z" fill="#e9edff"/>
+    <path d="M256 268 L408 180 L408 356 L256 444 Z" fill="#d3dafc"/>
+  </g>
+  <g fill="none" stroke="#1f2a4d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <!-- left face: 0..100 square mapped onto it -->
+    <g transform="matrix(1.52 0.88 0 1.76 104 180)">
+      <path d="M26 84 V30"/>
+      <path d="M70 80 V56 H50"/>
+    </g>
+    <!-- right face -->
+    <g transform="matrix(1.52 -0.88 0 1.76 256 268)">
+      <path d="M24 22 V66 H62"/>
+    </g>
+    <!-- top face -->
+    <g transform="matrix(1.52 -0.88 1.52 0.88 104 180)">
+      <path d="M26 70 H58 V36"/>
+    </g>
+  </g>
+  <g fill="#1f2a4d">
+    <g transform="matrix(1.52 0.88 0 1.76 104 180)">
+      <path d="M26 14 L15 32 H37 Z"/>
+      <path d="M36 56 L52 46 V66 Z"/>
+    </g>
+    <g transform="matrix(1.52 -0.88 0 1.76 256 268)">
+      <path d="M80 66 L62 55 V77 Z"/>
+    </g>
+    <g transform="matrix(1.52 -0.88 1.52 0.88 104 180)">
+      <path d="M58 18 L47 36 H69 Z"/>
+    </g>
+  </g>
+</svg>
