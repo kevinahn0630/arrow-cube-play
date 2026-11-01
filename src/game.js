@@ -1530,7 +1530,7 @@ function hud() {
     $('world').textContent = `🧪 생성기${game.params.gimmick ? ` · ${WORLDS[game.params.gimmick].name}` : ''}`;
     $('stageLabel').textContent = `시드 ${game.params.seed}`;
   } else {
-    $('world').textContent = WORLDS[game.world].name;
+    $('world').textContent = shortName(game.world);
     $('stageLabel').textContent = game.stage ? `스테이지 ${game.stage} / ${WORLDS[game.world].stages.length} ▾` : '튜토리얼 ▾';
   }
   $('remain').textContent = game.remaining;
@@ -1567,7 +1567,7 @@ function showClear() {
     note = `${w.tier ? `${starText(stars)} · ` : ''}${clearedCount(progress, game.world)} / ${w.stages.length} 클리어`;
     if (stars > before) note += ' · 별을 얻었어요!';
   }
-  $('clearTitle').textContent = last ? `${w.name} 완료!` : '스테이지 클리어!';
+  $('clearTitle').textContent = last ? `${shortName(game.world)} 완료!` : '스테이지 클리어!';
   $('clearStars').textContent = note;
   $('clearNext').textContent = !inWorld ? '새 퍼즐' : last ? '처음부터' : '다음 스테이지';
   $('clear').hidden = false;
@@ -1612,6 +1612,11 @@ function flagOf(key) {
   return f;
 }
 
+// A world's name as the player sees it, without its gimmick: 한국 · 짝 → 한국.
+function shortName(key) {
+  return WORLDS[key].name.split(' · ')[0];
+}
+
 // The home screen, with 이어서 하기 back into the stage the player left (if it is
 // still going).
 function showHome() {
@@ -1638,7 +1643,7 @@ function renderHome() {
   if (game.playing && game.world !== 'free' && !game.cleared && !game.stuck) {
     const back = node('button', 'continue');
     const text = node('span', 'continue-text');
-    text.append(node('b', '', '이어서 하기'), node('small', '', `${WORLDS[game.world].name} · ${game.stage ? `스테이지 ${game.stage}` : '튜토리얼'}`));
+    text.append(node('b', '', '이어서 하기'), node('small', '', `${shortName(game.world)} · ${game.stage ? `스테이지 ${game.stage}` : '튜토리얼'}`));
     back.append(flagOf(game.world), text);
     back.onclick = play;
     body.append(back);
@@ -1660,13 +1665,12 @@ function renderHome() {
 
 function worldCard(key, locked = false) {
   const w = WORLDS[key];
-  const [name, gimmick = '기믹 없음'] = w.name.split(' · ');
   const n = w.stages.length;
   const done = clearedCount(progress, key);
   const card = node('button', `world-card${game.playing && key === game.world ? ' current' : ''}${locked ? ' locked' : ''}`);
   card.style.setProperty('--accent', themeOf(key).accent);
   const main = node('span', 'wc-main');
-  main.append(node('span', 'wc-name', name), node('span', 'wc-gimmick', gimmick));
+  main.append(node('span', 'wc-name', shortName(key)));
   const foot = node('span', 'wc-foot');
   const bar = node('span', 'wc-bar');
   const fill = node('i');
@@ -1676,7 +1680,7 @@ function worldCard(key, locked = false) {
   if (w.tier) foot.append(node('span', 'stars', locked && !done ? '🔒' : starText(starsOf(progress, key))));
   foot.append(node('span', 'wc-count', `${done} / ${n}`));
   card.append(flagOf(key), main, foot);
-  card.setAttribute('aria-label', `${w.name}, ${done}/${n} 클리어${w.tier ? `, 별 ${starsOf(progress, key)}개` : ''}${locked ? ', 잠김' : ''}`);
+  card.setAttribute('aria-label', `${shortName(key)}, ${done}/${n} 클리어${w.tier ? `, 별 ${starsOf(progress, key)}개` : ''}${locked ? ', 잠김' : ''}`);
   card.onclick = () => openMenu(key);
   return card;
 }
@@ -1694,7 +1698,7 @@ function showStages(key) {
   const w = WORLDS[key];
   const n = w.stages.length;
   $('menuFlag').innerHTML = worldIcon(key);
-  $('menuTitle').textContent = w.name;
+  $('menuTitle').textContent = shortName(key);
   $('menuSub').textContent = `${w.tier ? `${starText(starsOf(progress, key))} · ` : ''}${clearedCount(progress, key)} / ${n} 클리어`;
   const body = $('menuBody');
   body.style.setProperty('--accent', themeOf(key).accent);
