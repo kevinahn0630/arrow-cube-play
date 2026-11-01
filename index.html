@@ -61,13 +61,14 @@
   .title .flag { width: 33px; }
   .title-text { min-width: 0; }
   .title b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .title small { display: block; font-size: 12px; color: var(--muted); }
+  .title small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* A world's flag (flags.js), 3:2 with soft corners. */
   .flag { display: block; flex: none; aspect-ratio: 3 / 2; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px #1f2a4d22; }
   .flag svg { display: block; width: 100%; height: 100%; }
-  .count { padding: 6px 14px; font-size: 22px; font-weight: 800; color: var(--accent); }
-  .hud-right { display: flex; align-items: center; gap: 8px; }
-  .hearts { padding: 6px 12px; font-size: 20px; line-height: 1.35; color: #e5484d; letter-spacing: 2px; }
+  .count { padding: 6px 14px; font-size: 22px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+  /* The hearts hang under the arrow count, so on a phone the top row keeps room for the world's name. */
+  .hud-right { position: relative; }
+  .hearts { position: absolute; top: calc(100% + 8px); right: 0; padding: 6px 12px; font-size: 20px; line-height: 1.35; color: #e5484d; letter-spacing: 2px; white-space: nowrap; }
   .hearts i { font-style: normal; color: var(--muted); opacity: 0.4; }
   .hearts.lost { animation: shake 0.4s; }
   /* The build players get (src/build.js): no ◀ 다시 ▶, auto-solve, generator or zoom buttons. */
