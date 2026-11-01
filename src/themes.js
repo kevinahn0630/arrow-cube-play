@@ -38,7 +38,7 @@ export const DEFAULT_THEME = {
   shadow: '#b3bad3', // the cells in their shadow
   lasso: '#b5651d', // lasso arrows
   knot: '#8e2f45', // the two arrows of a knot, which only a lasso can pull apart
-  boomerang: '#d0573a', // boomerang arrows
+  boomerang: '#b9471f', // boomerang arrows
   canal: '#a9d3f2', // canal water
   canalFlow: '#3f7fbf', // the chevrons showing which way it flows
   machete: '#d4a017', // machete arrows
@@ -54,9 +54,34 @@ export const DEFAULT_THEME = {
   millHub: '#5d4037', // windmill hubs
   millSail: '#e2cfa8', // windmill sails
   millFrame: '#7b5e3b', // the frame on each sail, and marks where they would swing to
-  bull: '#7a1f2b', // bulls (encierro)
+  bull: '#231a1a', // bulls (encierro): black, like the bulls of the run
   dialRing: '#c08a2e', // the rim of each dial
   dialHub: '#e9b949', // the hub the player taps to turn it
+  dialArrow: '#0f9d9a', // arrows riding a dial: turquoise, with a stepped head
+  diag: '#e8761c', // diagonal arrows: henna orange, with a paisley head
+  // Each country's mark on its gimmick arrows (game.js drawMarks), in its own colours;
+  // on the far faces they show white like the arrows.
+  ornament: {
+    knot: '#d7263d', // 중국: the red knot and tassel on each key's tail
+    knotGold: '#f5c04a',
+    taegeuk: ['#cd2e3a', '#0047a0'], // 한국: the taegeuk on each pair arrow's tail
+    laurel: '#5a8a2b', // 그리스: laurel leaves along a discus
+    rope: '#f3d7a7', // 미국: the twist of a lasso's rope
+    honda: '#8a4a14', // and the knot that closes its loop
+    dots: ['#fff4d6', '#ffc94a'], // 호주: dot painting along a boomerang
+    crown: '#ffd23f', // 러시아: the crown on each eagle
+    jewel: '#c62828',
+    horn: '#d6b77a', // 스페인: a bull's horns
+    scarf: '#d4232f', // and the red scarf round its neck
+    blade: '#d5dde3', // 브라질: a machete's blade, its back and its hilt
+    bladeBack: '#6f7f8c',
+    hilt: '#5b3a1e',
+    lanternEdge: '#b5541a', // 태국: a paper lantern's frame and the light inside
+    flame: '#ffe066',
+    henna: '#fff3dc', // 인도: henna dots, and the dark edge of the paisley head
+    hennaEdge: '#9c3d0a',
+    gear: '#4a4f5c', // 독일: the cog round each belt arrow
+  },
 };
 
 // Per world, keyed like WORLDS in stages.js. Every world has a picture in scenery.js
@@ -100,6 +125,6 @@ export const THEMES = {
 export function themeOf(world) {
   const own = THEMES[world] ?? {};
   const out = { ...DEFAULT_THEME, ...own };
-  for (const k of ['box', 'arrow']) out[k] = { ...DEFAULT_THEME[k], ...own[k] };
+  for (const k of ['box', 'arrow', 'ornament']) out[k] = { ...DEFAULT_THEME[k], ...own[k] };
   return out;
 }

@@ -22,6 +22,8 @@ let COLOR;
 let PALETTE; // key/gate and pair colours, one per link
 let GUARD; // Big Ben's two guard colours
 let AURORA; // aurora arrows and their curtains
+let ORN; // each country's marks on its gimmick arrows (themes.js `ornament`)
+const WHITE = new THREE.Color('#ffffff');
 const GLOW = new THREE.Color('#ffc21a'); // the tutorial's lit arrow or switch
 const GIMMICK_DEFAULTS = { N: 8, minLen: 3, maxLen: 9, straight: 0.55, fill: 0.95, block: 1, deep: 0.6, wrap: 0.45, long: 0.4, amount: 0.5 };
 
@@ -101,10 +103,13 @@ function applyTheme(t) {
     bull: c(t.bull),
     dialRing: c(t.dialRing),
     dialHub: c(t.dialHub),
+    dialArrow: c(t.dialArrow),
+    diag: c(t.diag),
   };
   PALETTE = t.links.map(c);
   GUARD = t.guards.map(c);
   AURORA = t.aurora.map(c);
+  ORN = Object.fromEntries(Object.entries(t.ornament).map(([k, v]) => [k, Array.isArray(v) ? v.map(c) : c(v)]));
   document.body.style.background = t.background;
   box.material.color.set(t.box.face);
   box.material.opacity = t.box.faceOpacity;
@@ -308,6 +313,8 @@ function colorOf(ar, face) {
   if (ar.lantern) return COLOR.lantern;
   if (ar.ray2) return COLOR.eagle;
   if (ar.run) return COLOR.bull;
+  if (ar.dial >= 0) return COLOR.dialArrow;
+  if (ar.diag) return COLOR.diag;
   return ar.hue >= 0 ? PALETTE[ar.hue % PALETTE.length] : COLOR.front;
 }
 
@@ -335,13 +342,21 @@ function drawArrow(ar, lit = null) {
   };
   const tr = ar.track;
   const { out, segIdx } = slice(tr, ar.s, ar.s + tr.len);
-  let headColor = COLOR.front;
-  for (let i = 0; i < segIdx.length; i++) {
-    const sg = tr.segs[segIdx[i]];
-    headColor = lit ? GLOW : colorOf(ar, sg.face);
+  // No wider than a cell, so heads side by side do not run into each other.
+  const a = Math.min(cs * (0.32 + 0.13 * (game.thick - 1)) * BOLD, cs * 0.5, line * 4.5) * (lit ? 1 + 0.3 * (lit.widen - 1) : 1);
+  // The line stops a little inside its head (an eagle's inside the head at its tail
+  // too), where the triangle is wider than the line, so the line's end never shows
+  // past the head's sides however bold arrows are drawn. The track counts 2 to a cell.
+  const toTrack = 2 / cs;
+  const from = ar.s + (ar.ray2 ? (0.3 * a + hw) * toTrack : 0);
+  const to = ar.s + tr.len - 0.3 * a * toTrack;
+  const shaft = to > from ? slice(tr, from, to) : { out: [], segIdx: [] };
+  for (let i = 0; i < shaft.segIdx.length; i++) {
+    const sg = tr.segs[shaft.segIdx[i]];
+    const color = lit ? GLOW : colorOf(ar, sg.face);
     if (sg.hidden) continue;
-    const A = out[i].p;
-    const B = out[i + 1].p;
+    const A = shaft.out[i].p;
+    const B = shaft.out[i + 1].p;
     // Cut the piece where it passes from one cell to the next and leave out the parts
     // in the dark.
     const ts = [0, 1];
@@ -358,13 +373,14 @@ function drawArrow(ar, lit = null) {
     const at = (t) => A.map((v, k) => v + (B[k] - v) * t);
     for (let j = 0; j + 1 < ts.length; j++) {
       if (inShadow(at((ts[j] + ts[j + 1]) / 2), sg)) continue;
-      const capP = j === 0 && out[i].cap ? hw : 0;
-      const capQ = j + 2 === ts.length && out[i + 1].cap ? hw : 0;
-      strip(pos, col, world(at(ts[j])), world(at(ts[j + 1])), sg.n, hw, eps, headColor, capP, capQ);
+      const capP = j === 0 && shaft.out[i].cap ? hw : 0;
+      const capQ = j + 2 === ts.length && shaft.out[i + 1].cap ? hw : 0;
+      strip(pos, col, world(at(ts[j])), world(at(ts[j + 1])), sg.n, hw, eps, color, capP, capQ);
     }
   }
   // Underground in a tunnel, or in the dark: no head either.
   const lastSeg = tr.segs[segIdx.at(-1)];
+  const headColor = lit ? GLOW : colorOf(ar, lastSeg.face);
   if (lastSeg.hidden || inShadow(out.at(-1).p, lastSeg)) {
     if (!lit) setGeometry(ar.mesh, pos, col);
     return;
@@ -379,8 +395,6 @@ function drawArrow(ar, lit = null) {
   d.normalize();
   const n = new THREE.Vector3(...tr.headN);
   const side = new THREE.Vector3().crossVectors(n, d);
-  // No wider than a cell, so heads side by side do not run into each other.
-  const a = Math.min(cs * (0.32 + 0.13 * (game.thick - 1)) * BOLD, cs * 0.5, line * 4.5) * (lit ? 1 + 0.3 * (lit.widen - 1) : 1);
   const o = n.multiplyScalar(eps * 1.5);
   // A head-shaped triangle at `at` pointing along dir, k times the usual size.
   const triangle = (at, dir, sideV, k = 1) => {
@@ -391,13 +405,15 @@ function drawArrow(ar, lit = null) {
       col.push(headColor.r, headColor.g, headColor.b);
     }
   };
-  triangle(H, d, side);
-  // A bull's horns.
+  // Some countries' gimmick arrows have a head of their own (drawMarks).
+  if (lit || !(ar.dial >= 0 || ar.machete || ar.lantern || ar.diag)) triangle(H, d, side);
+  // A bull's horns, ivory on its black, growing out of its head.
   if (ar.run) {
+    const horn = lit ? headColor : isFacing(lastSeg.face) ? ORN.horn : COLOR.back;
     for (const sgn of [1, -1]) {
-      const root = H.clone().addScaledVector(side, sgn * a * 0.45).add(o);
-      const tip = H.clone().addScaledVector(side, sgn * a * 0.95).addScaledVector(d, a * 0.5).add(o);
-      strip(pos, col, root, tip, tr.headN, hw * 0.55, 0, headColor);
+      const root = H.clone().addScaledVector(side, sgn * a * 0.36).addScaledVector(d, -a * 0.3).add(o);
+      const tip = H.clone().addScaledVector(side, sgn * a * 0.95).addScaledVector(d, a * 0.4).add(o);
+      strip(pos, col, root, tip, tr.headN, hw * 0.55, eps * 0.1, horn);
     }
   }
   // An eagle has a head at its tail end too.
@@ -406,16 +422,15 @@ function drawArrow(ar, lit = null) {
     const d2 = T.clone().sub(world(out[1].p)).normalize();
     triangle(T, d2, new THREE.Vector3().crossVectors(new THREE.Vector3(...tr.headN), d2));
   }
-  // A lasso: a small loop held out in front of the head.
+  // A lasso: a lariat's loop held out in front of the head.
   if (ar.lasso && ar.state !== 'exiting') {
-    const C = H.clone().addScaledVector(d, a * 1.05).add(o);
-    const r = a * 0.42;
-    for (let k = 0; k < 8; k++) {
-      const t0 = (k / 8) * Math.PI * 2;
-      const t1 = ((k + 1) / 8) * Math.PI * 2;
-      const P = C.clone().addScaledVector(d, Math.cos(t0) * r).addScaledVector(side, Math.sin(t0) * r);
-      const Q = C.clone().addScaledVector(d, Math.cos(t1) * r).addScaledVector(side, Math.sin(t1) * r);
-      strip(pos, col, P, Q, tr.headN, hw * 0.5, 0, headColor);
+    const C = H.clone().addScaledVector(d, a * 1.25).add(o);
+    for (let k = 0; k < 12; k++) {
+      const t0 = (k / 12) * Math.PI * 2;
+      const t1 = ((k + 1) / 12) * Math.PI * 2;
+      const P = C.clone().addScaledVector(d, Math.cos(t0) * a * 0.64).addScaledVector(side, Math.sin(t0) * a * 0.48);
+      const Q = C.clone().addScaledVector(d, Math.cos(t1) * a * 0.64).addScaledVector(side, Math.sin(t1) * a * 0.48);
+      strip(pos, col, P, Q, tr.headN, hw * 0.6, 0, headColor, hw * 0.2, hw * 0.2);
     }
   }
   // A boomerang: a hook off the tip of its head that curls round to the lane its way
@@ -432,7 +447,209 @@ function drawArrow(ar, lit = null) {
     const end = H.clone().addScaledVector(d, a * 0.5).addScaledVector(back, 2 * r);
     triangle(end.addScaledVector(d, -a * 0.6 * 0.45), d.clone().negate(), back, 0.45);
   }
-  if (!lit) setGeometry(ar.mesh, pos, col);
+  if (lit) return;
+  drawMarks(ar, { pos, col, eps, a, hw, H, d, side, tr, out, segIdx, shaft, headColor, headFace: lastSeg.face });
+  setGeometry(ar.mesh, pos, col);
+}
+
+// ---------- country marks
+
+// Points round an ellipse at (cx, cy) with radii rx and ry, turned by `turn` radians.
+const oval = (cx, cy, rx, ry = rx, turn = 0, n = 12) =>
+  Array.from({ length: n }, (_, i) => {
+    const t = (i / n) * 2 * Math.PI;
+    const x = rx * Math.cos(t);
+    const y = ry * Math.sin(t);
+    return [cx + x * Math.cos(turn) - y * Math.sin(turn), cy + x * Math.sin(turn) + y * Math.cos(turn)];
+  });
+// Half a disc: its rim from angle t0 to t1, closed along the chord.
+const halfDisc = (cx, cy, r, t0, n = 8) =>
+  Array.from({ length: n + 1 }, (_, i) => {
+    const t = t0 + (Math.PI * i) / n;
+    return [cx + r * Math.cos(t), cy + r * Math.sin(t)];
+  });
+// Points along a cubic Bézier curve, its last point left for the next curve.
+const cubic = (p0, p1, p2, p3, n = 6) =>
+  Array.from({ length: n }, (_, i) => {
+    const t = i / n;
+    const s = 1 - t;
+    return [0, 1].map((k) => s * s * s * p0[k] + 3 * s * s * t * p1[k] + 3 * s * t * t * p2[k] + t * t * t * p3[k]);
+  });
+// 인도's paisley head: a teardrop pointing along +x, in units of the head size.
+const PAISLEY = [
+  ...cubic([0.62, 0], [0.25, -0.1], [0.05, -0.48], [-0.25, -0.42]),
+  ...cubic([-0.25, -0.42], [-0.62, -0.36], [-0.62, 0.36], [-0.25, 0.42]),
+  ...cubic([-0.25, 0.42], [0.05, 0.48], [0.25, 0.1], [0.62, 0]),
+];
+// 캐나다's maple leaf, the outline of the flag icon (flags.js) on a 100 box, turned so
+// its tip points along +x, 1.25 head sizes tall, its stem end at x = -0.56.
+const MAPLE = [[50, 2], [57, 16], [65, 12], [61, 38], [75, 24], [78, 33], [94, 30], [88, 47], [96, 51], [70, 72], [74, 82], [52, 79], [53, 98], [47, 98], [48, 79], [26, 82], [30, 72], [4, 51], [12, 47], [6, 30], [22, 33], [25, 24], [39, 38], [35, 12], [43, 16]].map(([x, y]) => [((55 - y) * 1.25) / 96, ((x - 50) * 1.25) / 96]);
+
+// Each country's mark on its gimmick arrows (colours in themes.js `ornament`), over
+// the line and head drawArrow has drawn, or in place of its head. Sizes are in units
+// of the head size `a`, so they grow with bolder arrows; a mark on a far face shows
+// white like the arrow.
+function drawMarks(ar, { pos, col, eps, a, hw, H, d, side, tr, out, segIdx, shaft, headColor, headFace }) {
+  const tone = (c, face) => (isFacing(face) ? c : COLOR.back);
+  const V = (arr) => new THREE.Vector3(...arr);
+  // A flat shape: `pts` as [along, across] pairs in the frame at `at` (u along, v
+  // across) on the face with normal n, lifted `lift` eps. Fanned from its first point
+  // (convex shapes), or cut into triangles whatever its outline with `any`.
+  const shape = (at, u, v, n, lift, pts, c, any = false) => {
+    const W = ([x, y]) => at.clone().addScaledVector(u, x * a).addScaledVector(v, y * a).addScaledVector(n, eps * lift);
+    const P = pts.map(W);
+    const tris = [];
+    if (any) for (const f of THREE.ShapeUtils.triangulateShape(pts.map(([x, y]) => new THREE.Vector2(x, y)), [])) tris.push(...f.map((i) => P[i]));
+    else for (let i = 1; i + 1 < P.length; i++) tris.push(P[0], P[i], P[i + 1]);
+    for (const p of tris) {
+      pos.push(p.x, p.y, p.z);
+      col.push(c.r, c.g, c.b);
+    }
+  };
+  // A straight stroke from p to q (frame units), `half` its half-width.
+  const bar = (at, u, v, n, lift, p, q, half, c) => {
+    const W = ([x, y]) => at.clone().addScaledVector(u, x * a).addScaledVector(v, y * a);
+    strip(pos, col, W(p), W(q), n.toArray(), half * a, eps * lift, c);
+  };
+  // The drawn line as world points: its length, and the point `dist` along it with its
+  // direction and face, for marks spread along it.
+  const P = shaft.out.map((q) => world(q.p));
+  const lens = P.slice(1).map((p, i) => p.distanceTo(P[i]));
+  const total = lens.reduce((s, l) => s + l, 0);
+  const pointAt = (dist, fn) => {
+    for (let i = 0, run = 0; i < lens.length; run += lens[i++]) {
+      if (dist > run + lens[i] || lens[i] < 1e-9) continue;
+      const sg = tr.segs[shaft.segIdx[i]];
+      if (sg.hidden) return;
+      const u = P[i + 1].clone().sub(P[i]).normalize();
+      const n = V(sg.n);
+      fn(P[i].clone().lerp(P[i + 1], (dist - run) / lens[i]), u, new THREE.Vector3().crossVectors(n, u), n, sg.face);
+      return;
+    }
+  };
+  const along = (step, start, stop, fn) => {
+    for (let dist = start, k = 0; dist <= total - stop; dist += step) pointAt(dist, (...m) => fn(...m, k++));
+  };
+  // The tail: where the line starts, the way away from the body, and its face.
+  const tailSeg = tr.segs[segIdx[0]];
+  const T = world(out[0].p);
+  const back = T.clone().sub(world(out[1].p));
+  if (back.lengthSq() < 1e-12) back.copy(d).negate();
+  back.normalize();
+  const tn = V(tailSeg.n);
+  const tv = new THREE.Vector3().crossVectors(tn, back);
+  const tail = (dist) => T.clone().addScaledVector(back, dist);
+  const hn = V(tr.headN);
+
+  // 중국: a red knot with a tassel on each key's tail.
+  if (ar.gates.length && !ar.machete && !tailSeg.hidden) {
+    const at = tail(hw + 0.36 * a);
+    const red = tone(ORN.knot, tailSeg.face);
+    const gold = tone(ORN.knotGold, tailSeg.face);
+    for (const y of [-0.21, 0, 0.21]) bar(at, back, tv, tn, 1.7, [0.375, y * 0.3], [1.04, y], 0.05, red);
+    shape(at, back, tv, tn, 1.8, [[-0.42, 0], [0, -0.42], [0.42, 0], [0, 0.42]], red);
+    const q = [[-0.19, 0], [0, -0.19], [0.19, 0], [0, 0.19]];
+    for (let i = 0; i < 4; i++) bar(at, back, tv, tn, 1.9, q[i], q[(i + 1) % 4], 0.04, gold);
+    shape(at, back, tv, tn, 2.0, oval(0.42, 0, 0.094), gold);
+  }
+  // 한국: a taegeuk on each pair arrow's tail.
+  if (ar.partner >= 0 && !tailSeg.hidden) {
+    const at = tail(hw + 0.42 * a);
+    const r = 0.46;
+    const [red, blue] = ORN.taegeuk.map((c) => tone(c, tailSeg.face));
+    shape(at, back, tv, tn, 1.7, oval(0, 0, r, r, 0, 18), blue);
+    shape(at, back, tv, tn, 1.8, halfDisc(0, 0, r, Math.PI, 10), red);
+    shape(at, back, tv, tn, 1.9, halfDisc(-r / 2, 0, r / 2, 0), red);
+    shape(at, back, tv, tn, 2.0, halfDisc(r / 2, 0, r / 2, Math.PI), blue);
+    const rim = oval(0, 0, r, r, 0, 18);
+    for (let i = 0; i < rim.length; i++) bar(at, back, tv, tn, 2.1, rim[i], rim[(i + 1) % rim.length], 0.04, tone(WHITE, tailSeg.face));
+  }
+  // 캐나다: a maple leaf in the arrow's colour on each aurora arrow's tail.
+  if (ar.tint >= 0 && !tailSeg.hidden) {
+    shape(tail(hw + 0.49 * a), back, tv, tn, 1.7, MAPLE, tone(AURORA[ar.tint], tailSeg.face), true);
+  }
+  // 그리스: laurel leaves along a discus, angled back.
+  if (ar.disc) {
+    along(0.875 * a, 0.62 * a, 1.46 * a, (p, u, v, n, face) => {
+      for (const sg of [1, -1]) shape(p, u, v, n, 1.7, oval(-0.104, sg * (hw / a + 0.15), 0.333, 0.135, -sg * 0.61, 10), tone(ORN.laurel, face));
+    });
+  }
+  // 미국: the twist of the lasso's rope, and the knot that closes its loop.
+  if (ar.lasso) {
+    const k = (0.86 * hw) / a;
+    along(0.417 * a, 0.21 * a, 0.94 * a, (p, u, v, n, face) => bar(p, u, v, n, 1.7, [-0.146, -k], [0.146, k], 0.047, tone(ORN.rope, face)));
+    if (ar.state !== 'exiting') shape(H, d, side, hn, 1.7, oval(0.65, 0, 0.19), tone(ORN.honda, headFace));
+  }
+  // 호주: dot painting along a boomerang and on its hook.
+  if (ar.boom) {
+    along(0.396 * a, 0.04 * a, 0.94 * a, (p, u, v, n, face, k) => shape(p, u, v, n, 1.7, oval(0, 0, 0.094, 0.094, 0, 8), tone(ORN.dots[k % 2], face)));
+    if (d.dot(V(ar.dir)) > 0.5) {
+      const bk = V(ar.boom);
+      const r = 0.45 * a;
+      const C = H.clone().addScaledVector(d, 0.5 * a).addScaledVector(bk, r);
+      for (const t of [Math.PI / 3, (2 * Math.PI) / 3]) {
+        shape(C.clone().addScaledVector(d, Math.sin(t) * r).addScaledVector(bk, -Math.cos(t) * r), d, side, hn, 1.8, oval(0, 0, 0.0625, 0.0625, 0, 8), tone(ORN.dots[0], headFace));
+      }
+    }
+  }
+  // 러시아: a crown on each eagle, halfway along its longest straight stretch.
+  if (ar.ray2 && lens.length) {
+    let best = [0, 0];
+    for (let i = 0, run = 0, from = 0; i < lens.length; run += lens[i++]) {
+      const turn = i && P[i].clone().sub(P[i - 1]).normalize().dot(P[i + 1].clone().sub(P[i]).normalize()) < 0.999;
+      if (turn) from = run;
+      if (run + lens[i] - from > best[1]) best = [from, run + lens[i] - from];
+    }
+    pointAt(best[0] + best[1] / 2, (p, u, v, n, face) => {
+      const c = tone(ORN.crown, face);
+      shape(p, u, v, n, 1.7, [[-0.5, 0.21], [0.5, 0.21], [0.5, 0.5], [-0.5, 0.5]], c);
+      for (const spike of [[[-0.5, 0.5], [-0.5, 0.917], [-0.167, 0.5]], [[-0.25, 0.5], [0, 1], [0.25, 0.5]], [[0.167, 0.5], [0.5, 0.917], [0.5, 0.5]]]) shape(p, u, v, n, 1.7, spike, c);
+      shape(p, u, v, n, 1.8, oval(0, 0.396, 0.094), tone(ORN.jewel, face));
+    });
+  }
+  // 스페인: the red scarf round a bull's neck, just behind its head.
+  if (ar.run && total > 0.51 * a) {
+    const w = Math.max(0.52, hw / a + 0.12);
+    pointAt(total - 0.51 * a, (p, u, v, n, face) => {
+      const c = tone(ORN.scarf, face);
+      shape(p, u, v, n, 1.7, [[-0.167, -w], [0.167, -w], [0.167, w], [-0.167, w]], c);
+      shape(p, u, v, n, 1.7, [[-0.083, w - 0.06], [-0.75, w + 0.355], [-0.458, w - 0.145]], c);
+    });
+  }
+  // 인도: henna dots along a diagonal arrow.
+  if (ar.diag) {
+    along(0.417 * a, 0.17 * a, 1.15 * a, (p, u, v, n, face) => {
+      for (const sg of [1, -1]) shape(p, u, v, n, 1.7, oval(0, (sg * 0.5 * hw) / a, 0.058, 0.058, 0, 8), tone(ORN.henna, face));
+    });
+  }
+
+  // Heads of their own, in place of the triangle.
+  if (ar.dial >= 0) {
+    // 멕시코: a stepped pyramid.
+    for (const [x0, x1, w] of [[-0.6, -0.23, 0.62], [-0.23, 0.13, 0.4], [0.13, 0.5, 0.18]]) {
+      shape(H, d, side, hn, 1.5, [[x0, -w], [x1, -w], [x1, w], [x0, w]], headColor);
+    }
+  } else if (ar.machete) {
+    // 브라질: a machete's blade on a dark hilt.
+    shape(H, d, side, hn, 1.5, [[-0.32, -0.5], [-0.15, -0.5], [-0.15, 0.5], [-0.32, 0.5]], tone(ORN.hilt, headFace));
+    shape(H, d, side, hn, 1.5, [[-0.15, -0.3], [0.85, -0.3], [1.2, 0.02], [0.95, 0.34], [0.1, 0.4], [-0.15, 0.34]], tone(ORN.blade, headFace));
+    shape(H, d, side, hn, 1.6, [[-0.15, -0.3], [0.85, -0.3], [0.85, -0.2], [-0.15, -0.2]], tone(ORN.bladeBack, headFace));
+  } else if (ar.lantern) {
+    // 태국: a paper lantern with a light inside.
+    const edge = tone(ORN.lanternEdge, headFace);
+    shape(H, d, side, hn, 1.5, [[-0.6, -0.44], [0.35, -0.44], [0.35, 0.44], [-0.6, 0.44]], headColor);
+    shape(H, d, side, hn, 1.5, [[0.35, -0.22], [0.78, 0], [0.35, 0.22]], edge);
+    for (const x of [-0.38, 0.13]) shape(H, d, side, hn, 1.6, [[x - 0.03, -0.44], [x + 0.03, -0.44], [x + 0.03, 0.44], [x - 0.03, 0.44]], edge);
+    shape(H, d, side, hn, 1.7, oval(-0.12, 0, 0.2, 0.15), tone(ORN.flame, headFace));
+  } else if (ar.diag) {
+    // 인도: a paisley edged dark, with a ring and a dot of henna inside.
+    const scaled = (k, dx) => PAISLEY.map(([x, y]) => [x * k + dx, y * k]);
+    shape(H, d, side, hn, 1.45, scaled(1.12, 0.03), tone(ORN.hennaEdge, headFace));
+    shape(H, d, side, hn, 1.5, PAISLEY, headColor);
+    shape(H, d, side, hn, 1.6, scaled(0.5, -0.02), tone(ORN.henna, headFace));
+    shape(H, d, side, hn, 1.7, scaled(0.4, -0.03), headColor);
+    shape(H, d, side, hn, 1.8, oval(-0.17, 0, 0.07), tone(ORN.henna, headFace));
+  }
 }
 
 // Mirrors, guard tiles (filled when shut, outlined when open), gates still shut,
@@ -575,8 +792,16 @@ function drawDecor() {
     }
   }
   // The belt: a pale band with a mark every few cells, so it shows when it moves, and
-  // a crate round each arrow riding it. Only on faces toward the camera; seen through
-  // the cube the band would hide everything behind it.
+  // a cog round each arrow riding it (독일). Only on faces toward the camera; seen
+  // through the cube the band would hide everything behind it.
+  const cog = ({ C, n, u, v }) => {
+    const ring = (t) => C.clone().addScaledVector(u, Math.cos(t) * cs * 0.34).addScaledVector(v, Math.sin(t) * cs * 0.34);
+    for (let k = 0; k < 16; k++) strip(pos, col, ring((k / 16) * 2 * Math.PI), ring(((k + 1) / 16) * 2 * Math.PI), n, cs * 0.04, eps * 0.8, ORN.gear, cs * 0.012, cs * 0.012);
+    for (let k = 0; k < 8; k++) {
+      const out = u.clone().multiplyScalar(Math.cos((k * Math.PI) / 4)).addScaledVector(v, Math.sin((k * Math.PI) / 4));
+      strip(pos, col, C.clone().addScaledVector(out, cs * 0.33), C.clone().addScaledVector(out, cs * 0.46), n, cs * 0.06, eps * 0.8, ORN.gear);
+    }
+  };
   if (belt) {
     const L = belt.cells.length;
     const glow = game.beltHintUntil ? 0.5 + 0.5 * Math.sin(performance.now() / 90) : 0;
@@ -587,7 +812,7 @@ function drawDecor() {
       square(info, cs * 0.5, band, eps * 0.3);
       if ((p - game.state.shift + L) % 4 === 0) square(info, cs * 0.1, COLOR.beltMark, eps * 0.6);
       const o = ownerAt(game.puz, game.state, id);
-      if (o >= 0 && game.arrows[o].state !== 'exiting') outline(info, cs * 0.34, cs * 0.04, COLOR.front, eps * 0.8);
+      if (o >= 0 && game.arrows[o].state !== 'exiting') cog(info);
     });
   }
   for (const ar of arrows) {
