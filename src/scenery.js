@@ -22,8 +22,12 @@ function layout(w, h) {
   const corner = (k - Math.sqrt(k * k - 8 * ((w * w + h * h) / 4 - r * r))) / 4;
   return {
     w, h, r, band, corner,
-    big: Math.min(corner * 0.85, w * 0.45), // a landmark in a bottom corner
-    ground: Math.max(0.06 * h, 0.3 * band), // the strip along the bottom edge
+    // A landmark in a bottom corner: on a portrait screen no taller than the room under
+    // the cube's lower edges allows.
+    big: tall ? Math.min(corner * 0.85, w * 0.45, band * 0.62) : Math.min(corner * 0.85, w * 0.45),
+    // The strip along the bottom edge; on a portrait screen deep enough that the ground
+    // clears a phone's home indicator.
+    ground: tall ? Math.max(0.06 * h, 0.75 * band) : Math.max(0.06 * h, 0.3 * band),
     // A sun or moon in the top-left corner, under the HUD (mirror x for the right one).
     sky: tall ? { x: w * 0.18, y: band * 0.7, r: band * 0.1 } : { x: corner * 0.45, y: corner * 0.62, r: corner * 0.1 },
   };
@@ -371,8 +375,8 @@ function calmSky({ w, sky }, sun = '#fff7ef', right = true, bird = '#b4a3b1') {
   const big = sky.r * 4.2;
   return disc(sx, sky.y, sky.r, sun) +
     pill(right ? sky.x * 0.4 : w - sky.x * 0.4 - big, sky.y + sky.r * 0.6, big) +
-    pill(w * 0.5 - sky.r * 1.3, sky.y + sky.r * 3.2, sky.r * 2.6, 0.6) +
-    birds(right ? sky.x * 1.4 : w - sky.x * 1.4, sky.y + sky.r * 4.6, sky.r * 1.5, bird);
+    pill(w * 0.5 - sky.r * 1.3, sky.y + sky.r * 1.2, sky.r * 2.6, 0.6) +
+    birds(right ? sky.x * 1.5 : w - sky.x * 1.5, sky.y + sky.r * 2.6, sky.r * 1.4, bird);
 }
 
 // Two rows of low round hills on `base`, the far row paler; `top` is the tallest.
@@ -381,7 +385,7 @@ const rolling = (w, base, top, [far, near]) =>
   hills(base, [[0.32 * w, 0.4 * w, top * 0.3], [0.78 * w, 0.34 * w, top * 0.26]], near);
 
 // Where a picture's ground starts, and how tall its hills may be.
-const groundLine = ({ h, band, ground: g }, k = 0.8) => ({ base: h - g * 0.4, top: band ? band * k : h * k * 0.2 });
+const groundLine = ({ h, band, ground: g }, k = 0.8) => ({ base: h - g * 0.4, top: band ? band * k * 0.62 : h * k * 0.2 });
 
 // ---------- each country's own sky and ground (2026-11-02, so no two look alike)
 
@@ -394,7 +398,7 @@ const kite = (x, y, s) => `<path d="M${n(x + s * 0.4)} ${n(y + s * 0.6)}Q${n(x +
 // A small sailing boat on the water at (x, y).
 const sailboat = (x, y, s) => `<path d="M${n(x - s * 0.5)} ${n(y)}H${n(x + s * 0.5)}L${n(x + s * 0.35)} ${n(y + s * 0.18)}H${n(x - s * 0.35)}Z" fill="#7a8fb0"/><path d="M${n(x)} ${n(y - s * 0.05)}V${n(y - s)}L${n(x + s * 0.42)} ${n(y - s * 0.12)}Z" fill="#ffffff"/><path d="M${n(x - s * 0.04)} ${n(y - s * 0.1)}V${n(y - s * 0.8)}L${n(x - s * 0.36)} ${n(y - s * 0.12)}Z" fill="#f4ede4"/>`;
 // Long soft rays round a sun.
-const rays = (x, y, r, fill) => Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; return `<path d="M${n(x + Math.cos(a - 0.08) * r * 1.3)} ${n(y + Math.sin(a - 0.08) * r * 1.3)}L${n(x + Math.cos(a) * r * 2.2)} ${n(y + Math.sin(a) * r * 2.2)}L${n(x + Math.cos(a + 0.08) * r * 1.3)} ${n(y + Math.sin(a + 0.08) * r * 1.3)}Z" fill="${fill}" opacity="0.5"/>`; }).join('');
+const rays = (x, y, r, fill) => Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; return `<path d="M${n(x + Math.cos(a - 0.08) * r * 1.3)} ${n(y + Math.sin(a - 0.08) * r * 1.3)}L${n(x + Math.cos(a) * r * 1.9)} ${n(y + Math.sin(a) * r * 1.9)}L${n(x + Math.cos(a + 0.08) * r * 1.3)} ${n(y + Math.sin(a + 0.08) * r * 1.3)}Z" fill="${fill}" opacity="0.5"/>`; }).join('');
 // A kangaroo about s tall standing on (x, y), facing right.
 const kangaroo = (x, y, s, fill) => `<path transform="translate(${n(x)} ${n(y)}) scale(${u(s)})" d="M-0.55 0Q-0.2 -0.05 -0.05 -0.1Q0.05 -0.45 0.12 -0.62Q0.16 -0.78 0.2 -0.88L0.17 -1L0.24 -0.95L0.28 -1L0.3 -0.9Q0.4 -0.88 0.4 -0.82Q0.3 -0.8 0.26 -0.74Q0.34 -0.6 0.3 -0.45L0.4 -0.38L0.28 -0.36Q0.25 -0.2 0.2 -0.06L0.32 0H-0.05Q-0.3 -0.04 -0.55 0Z" fill="${fill}"/>`;
 // Rows of colour from y = top to the bottom edge (fields), each row deeper than the last.
@@ -417,7 +421,7 @@ const gondola = (x, y, s) => `<path d="M${n(x - s * 0.6)} ${n(y - s * 0.12)}Q${n
 const snowfall = (w, h, seed) => { const rand = random(seed); let d = ''; for (let i = 0; i < (w * h) / 5000; i++) d += `<circle cx="${n(rand() * w)}" cy="${n(rand() * h)}" r="${n(1 + rand() * 1.8)}"/>`; return `<g fill="#ffffff" opacity="0.85">${d}</g>`; };
 const rain = (w, h, seed) => { const rand = random(seed); let d = ''; for (let i = 0; i < (w * h) / 9000; i++) { const x = rand() * w, y = rand() * h * 0.8; d += `M${n(x)} ${n(y)}l-4 12`; } return `<path d="${d}" stroke="#8f9ab3" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round"/>`; };
 // Marigold garlands swagged across the top, under the HUD.
-const garlands = (w, sky) => [[0, 0.48, sky.y * 1.3], [0.52, 1, sky.y * 1.05]].map(([a, b, y]) => {
+const garlands = (w, sky) => [[0, 0.48, sky.y * 0.95], [0.52, 1, sky.y * 0.82]].map(([a, b, y]) => {
   let out = '';
   for (let t = 0; t <= 1; t += 0.06) { const x = w * (a + (b - a) * t); const yy = y + Math.sin(t * Math.PI) * sky.r * 1.6; out += `<circle cx="${n(x)}" cy="${n(yy)}" r="${n(sky.r * 0.28)}" fill="${t * 20 % 2 < 1 ? '#f6b04a' : '#f28c5b'}"/>`; }
   return out;
@@ -737,7 +741,7 @@ function india(L) {
     trees += `<ellipse cx="${n(cx)}" cy="${n(base - big * s * 0.5)}" rx="${n(big * s * 0.12)}" ry="${n(big * s * 0.5)}" fill="#7fb68f"/><path d="M${n(cx)} ${n(base)}V${n(base - big * s)}A${n(big * s * 0.12)} ${n(big * s * 0.5)} 0 0 1 ${n(cx)} ${n(base)}Z" fill="#679f78"/>`;
   }
   const pool = base + (h - base) * 0.3;
-  return garlands(w, sky) + disc(w / 2, sky.y + sky.r * 3.2, sky.r * 1.3, '#ffd2a6') +
+  return garlands(w, sky) + disc(w / 2, sky.y + sky.r * 1.6, sky.r * 1.2, '#ffd2a6') +
     hills(base, [[0.2 * w, 0.42 * w, top * 0.4], [0.8 * w, 0.4 * w, top * 0.32]], '#f4cfc2') + tomb + trees + floor(w, h, base, '#f1d0b8') + water(w, h, pool, ['#b7dcd8', '#93c8c4'], 12);
 }
 
@@ -745,7 +749,7 @@ function india(L) {
 
 function canada({ w, h, band, big, ground }) {
   const lake = h - ground * 0.55;
-  const top = band ? band * 0.9 : h * 0.24;
+  const top = band ? band * 0.6 : h * 0.24;
   const lights = band ? band * 0.75 : h * 0.32;
   const rand = random(3);
   // A row of spruces from x0 to x1 on the shore, `size` tall give or take.
@@ -765,7 +769,7 @@ function canada({ w, h, band, big, ground }) {
     curtain(w, lights, top * 0.55, 'sc-aurora-1', 0.4) +
     curtain(w, lights - top * 0.18, top * 0.4, 'sc-aurora-2', 2.1) +
     mountains(lake, [[0.12, 0.2, 0.75], [0.38, 0.22, 1], [0.66, 0.2, 0.85], [0.92, 0.18, 0.7]].map(([x, hw, k]) => [x * w, hw * w, top * k]), '#4a6482', '#e1e9f3') +
-    forest(0, w, ground * 0.9) +
+    forest(0, w, Math.min(ground * 0.9, big * 0.4)) +
     forest(-big * 0.1, big * 1.0, big * 0.55) +
     forest(w - big * 0.9, w + big * 0.1, big * 0.5) +
     water(w, h, lake, ['#2e4862', '#22374f'], 7) +
@@ -797,7 +801,7 @@ function japan(L) {
   return (
     disc(w - sky.x, sky.y, sky.r, '#f6b3b0') +
     petals +
-    fuji(w / 2, lake, band ? w * 0.6 : w * 0.32, band ? band * 0.85 : h * 0.2) +
+    fuji(w / 2, lake, band ? w * 0.6 : w * 0.32, band ? band * 0.55 : h * 0.2) +
     put(w - big * 0.95, lake, big * 0.95, SAKURA) +
     water(w, h, lake, ['#e1e9f0', '#bccbd9'], 18) +
     put(big * 0.05, lake + (h - lake) * 0.35, big * 0.85, TORII)
@@ -835,7 +839,7 @@ const SAKURA =
 // ---------- 네덜란드: windmills by a canal and rows of tulips under big clouds
 
 function netherlands({ w, h, big, ground, sky }) {
-  const canal = h - ground;
+  const canal = h - ground * 0.6;
   return (
     cloud(sky.x - sky.r * 2.2, sky.y + sky.r * 0.4, sky.r * 4.4) +
     cloud(w - sky.x - sky.r * 2, sky.y, sky.r * 3.8, '#ffffff', 0.85) +
