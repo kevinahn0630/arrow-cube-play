@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 import { makeCube, generate, add, scale, cross, axisOf } from './cube.js';
-import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, darkCell, exitEnd, charge, clocked, deadEnd } from './rules.js';
+import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, cutBy, darkCell, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
 import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone } from './progress.js';
 import { STAGE_SEEDS } from './stage-seeds.js';
-import { TUTORIALS, tutorialParams, findTarget, switchHint, lookCell } from './tutorial.js';
+import { TUTORIALS, tutorialParams, findTarget, lookCell } from './tutorial.js';
 import { TUTORIAL_SEEDS } from './tutorial-seeds.js';
 import { worldIcon } from './flags.js';
 import { themeOf } from './themes.js';
@@ -22,9 +22,10 @@ let COLOR;
 let PALETTE; // key/gate and pair colours, one per link
 let GUARD; // Big Ben's two guard colours
 let AURORA; // aurora arrows and their curtains
+let PANEL; // Mondrian panels' fills
 let ORN; // each country's marks on its gimmick arrows (themes.js `ornament`)
 const WHITE = new THREE.Color('#ffffff');
-const GLOW = new THREE.Color('#ffc21a'); // the tutorial's lit arrow or switch
+const GLOW = new THREE.Color('#ffc21a'); // the tutorial's lit arrow
 const GIMMICK_DEFAULTS = { N: 8, minLen: 3, maxLen: 9, straight: 0.55, fill: 0.95, block: 1, deep: 0.6, wrap: 0.45, long: 0.4, amount: 0.5 };
 
 const $ = (id) => document.getElementById(id);
@@ -75,9 +76,7 @@ function applyTheme(t) {
     mirror: c(t.mirror),
     mirrorTile: c(t.mirrorTile),
     disc: c(t.disc),
-    belt: c(t.belt),
-    beltMark: c(t.beltMark),
-    beltHint: c(t.beltHint),
+
     tunnel: c(t.tunnel),
     obelisk: c(t.obelisk),
     obeliskTop: c(t.obeliskTop),
@@ -94,21 +93,24 @@ function applyTheme(t) {
     lanternGlow: c(t.lanternGlow),
     dark: c(t.dark),
     beam: c(t.beam),
-    eagle: c(t.eagle),
-    shojiFrame: c(t.shojiFrame),
-    shojiPaper: c(t.shojiPaper),
-    millHub: c(t.millHub),
-    millSail: c(t.millSail),
-    millFrame: c(t.millFrame),
+    ice: c(t.ice),
+    iceBlock: c(t.iceBlock),
+    iceEdge: c(t.iceEdge),
+    samurai: c(t.samurai),
+
     bull: c(t.bull),
     dialRing: c(t.dialRing),
     dialHub: c(t.dialHub),
     dialArrow: c(t.dialArrow),
     diag: c(t.diag),
+    wall: c(t.wall),
+    panelLine: c(t.panelLine),
+    panelOpen: c(t.panelOpen),
   };
   PALETTE = t.links.map(c);
   GUARD = t.guards.map(c);
   AURORA = t.aurora.map(c);
+  PANEL = t.panels.map(c);
   ORN = Object.fromEntries(Object.entries(t.ornament).map(([k, v]) => [k, Array.isArray(v) ? v.map(c) : c(v)]));
   document.body.style.background = t.background;
   box.material.color.set(t.box.face);
@@ -142,7 +144,7 @@ function fadeScenery() {
 const arrowMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
 const decor = new THREE.Mesh(new THREE.BufferGeometry(), arrowMat); // mirrors, guards, gates
 scene.add(decor);
-// The tutorial's lit arrow or switch: a pulsing glow round it.
+// The tutorial's lit arrow: a pulsing glow round it.
 const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
 const glow = new THREE.Mesh(new THREE.BufferGeometry(), glowMat);
 scene.add(glow);
@@ -178,15 +180,18 @@ const game = {
   cleared: false,
   showFree: false,
   solveTimer: 0,
-  beltHintUntil: 0, // the belt glows until then: nothing can leave until it moves
+
+  fell: [], // per Berlin wall, when it fell (0 while it stands)
+  pieces: [], // what samurais have cut off, still to be shown dropping away
+  falling: false, // a wall is crumbling or a cut piece dropping: the decor is drawn again every frame
   autoSolved: false, // the auto-solve button was used on this stage: clearing it is not recorded
   thick: 1, // arrows drawn this much bolder where cells are small on screen (cellPixels)
   stuck: false, // the stage is over without a clear (a clocked dead end, or no hearts left); the card starts it over
   heartsMax: 0, // wrong taps this stage forgives (country stages from 6 on); 0: no limit
   hearts: 0, // of those, how many are left
   // The tutorial being played (stage 0 of a world): its steps, the step on now (k), the
-  // arrow each step was about (targets), the arrow lit now (focus, -1 for none), the
-  // switch move lit now (hint) and whether it is between steps (wait).
+  // arrow each step was about (targets), the arrow lit now (focus, -1 for none) and
+  // whether it is between steps (wait).
   tut: null,
   turn: null, // the camera turning to show something: { from, to, up, upTo, len, t0 }
   screen: 'splash', // what is in front: the loading screen, the home screen or the game ('play')
@@ -307,11 +312,12 @@ function colorOf(ar, face) {
   if (ar.tint >= 0) return AURORA[ar.tint];
   if (ar.disc) return COLOR.disc;
   if (ar.lasso) return COLOR.lasso;
+  if (ar.samurai) return COLOR.samurai;
   if (ar.knot >= 0) return COLOR.knot;
   if (ar.boom) return COLOR.boomerang;
   if (ar.machete) return COLOR.machete;
   if (ar.lantern) return COLOR.lantern;
-  if (ar.ray2) return COLOR.eagle;
+  if (ar.ice) return COLOR.ice;
   if (ar.run) return COLOR.bull;
   if (ar.dial >= 0) return COLOR.dialArrow;
   if (ar.diag) return COLOR.diag;
@@ -344,11 +350,11 @@ function drawArrow(ar, lit = null) {
   const { out, segIdx } = slice(tr, ar.s, ar.s + tr.len);
   // No wider than a cell, so heads side by side do not run into each other.
   const a = Math.min(cs * (0.32 + 0.13 * (game.thick - 1)) * BOLD, cs * 0.5, line * 4.5) * (lit ? 1 + 0.3 * (lit.widen - 1) : 1);
-  // The line stops a little inside its head (an eagle's inside the head at its tail
-  // too), where the triangle is wider than the line, so the line's end never shows
-  // past the head's sides however bold arrows are drawn. The track counts 2 to a cell.
+  // The line stops a little inside its head, where the triangle is wider than the
+  // line, so the line's end never shows past the head's sides however bold arrows are
+  // drawn. The track counts 2 to a cell.
   const toTrack = 2 / cs;
-  const from = ar.s + (ar.ray2 ? (0.3 * a + hw) * toTrack : 0);
+  const from = ar.s;
   const to = ar.s + tr.len - 0.3 * a * toTrack;
   const shaft = to > from ? slice(tr, from, to) : { out: [], segIdx: [] };
   for (let i = 0; i < shaft.segIdx.length; i++) {
@@ -406,7 +412,7 @@ function drawArrow(ar, lit = null) {
     }
   };
   // Some countries' gimmick arrows have a head of their own (drawMarks).
-  if (lit || !(ar.dial >= 0 || ar.machete || ar.lantern || ar.diag)) triangle(H, d, side);
+  if (lit || !(ar.dial >= 0 || ar.machete || ar.lantern || ar.diag || ar.samurai)) triangle(H, d, side);
   // A bull's horns, ivory on its black, growing out of its head.
   if (ar.run) {
     const horn = lit ? headColor : isFacing(lastSeg.face) ? ORN.horn : COLOR.back;
@@ -415,12 +421,6 @@ function drawArrow(ar, lit = null) {
       const tip = H.clone().addScaledVector(side, sgn * a * 0.95).addScaledVector(d, a * 0.4).add(o);
       strip(pos, col, root, tip, tr.headN, hw * 0.55, eps * 0.1, horn);
     }
-  }
-  // An eagle has a head at its tail end too.
-  if (ar.ray2) {
-    const T = world(out[0].p);
-    const d2 = T.clone().sub(world(out[1].p)).normalize();
-    triangle(T, d2, new THREE.Vector3().crossVectors(new THREE.Vector3(...tr.headN), d2));
   }
   // A lasso: a lariat's loop held out in front of the head.
   if (ar.lasso && ar.state !== 'exiting') {
@@ -592,20 +592,20 @@ function drawMarks(ar, { pos, col, eps, a, hw, H, d, side, tr, out, segIdx, shaf
       }
     }
   }
-  // 러시아: a crown on each eagle, halfway along its longest straight stretch.
-  if (ar.ray2 && lens.length) {
-    let best = [0, 0];
-    for (let i = 0, run = 0, from = 0; i < lens.length; run += lens[i++]) {
-      const turn = i && P[i].clone().sub(P[i - 1]).normalize().dot(P[i + 1].clone().sub(P[i]).normalize()) < 0.999;
-      if (turn) from = run;
-      if (run + lens[i] - from > best[1]) best = [from, run + lens[i] - from];
+  // 러시아: a snowflake on each frozen arrow's tail.
+  if (ar.ice && !tailSeg.hidden) {
+    const at = tail(hw + 0.44 * a);
+    const c = tone(ORN.frost, tailSeg.face);
+    for (let k = 0; k < 3; k++) {
+      const [x, y] = [0.44 * Math.cos((k * Math.PI) / 3), 0.44 * Math.sin((k * Math.PI) / 3)];
+      bar(at, back, tv, tn, 1.7, [-x, -y], [x, y], 0.06, c);
     }
-    pointAt(best[0] + best[1] / 2, (p, u, v, n, face) => {
-      const c = tone(ORN.crown, face);
-      shape(p, u, v, n, 1.7, [[-0.5, 0.21], [0.5, 0.21], [0.5, 0.5], [-0.5, 0.5]], c);
-      for (const spike of [[[-0.5, 0.5], [-0.5, 0.917], [-0.167, 0.5]], [[-0.25, 0.5], [0, 1], [0.25, 0.5]], [[0.167, 0.5], [0.5, 0.917], [0.5, 0.5]]]) shape(p, u, v, n, 1.7, spike, c);
-      shape(p, u, v, n, 1.8, oval(0, 0.396, 0.094), tone(ORN.jewel, face));
-    });
+    shape(at, back, tv, tn, 1.8, oval(0, 0, 0.11), c);
+  }
+  // 일본: the white braid of a katana's grip along a samurai.
+  if (ar.samurai) {
+    const k = (0.75 * hw) / a;
+    along(0.38 * a, 0.2 * a, 0.75 * a, (p, u, v, n, face) => shape(p, u, v, n, 1.7, [[-0.13, 0], [0, -k], [0.13, 0], [0, k]], tone(ORN.tsukaIto, face)));
   }
   // 스페인: the red scarf round a bull's neck, just behind its head.
   if (ar.run && total > 0.51 * a) {
@@ -641,6 +641,11 @@ function drawMarks(ar, { pos, col, eps, a, hw, H, d, side, tr, out, segIdx, shaf
     shape(H, d, side, hn, 1.5, [[0.35, -0.22], [0.78, 0], [0.35, 0.22]], edge);
     for (const x of [-0.38, 0.13]) shape(H, d, side, hn, 1.6, [[x - 0.03, -0.44], [x + 0.03, -0.44], [x + 0.03, 0.44], [x - 0.03, 0.44]], edge);
     shape(H, d, side, hn, 1.7, oval(-0.12, 0, 0.2, 0.15), tone(ORN.flame, headFace));
+  } else if (ar.samurai) {
+    // 일본: a katana's blade, its back darker, out of a round gold guard.
+    shape(H, d, side, hn, 1.5, [[-0.22, -0.16], [0.6, -0.16], [1.1, 0.05], [0.66, 0.16], [-0.22, 0.16]], tone(ORN.katana, headFace));
+    shape(H, d, side, hn, 1.6, [[-0.22, 0.09], [0.66, 0.09], [0.66, 0.16], [-0.22, 0.16]], tone(ORN.katanaBack, headFace));
+    shape(H, d, side, hn, 1.7, oval(-0.3, 0, 0.1, 0.46), tone(ORN.tsuba, headFace));
   } else if (ar.diag) {
     // 인도: a paisley edged dark, with a ring and a dot of henna inside.
     const scaled = (k, dx) => PAISLEY.map(([x, y]) => [x * k + dx, y * k]);
@@ -653,14 +658,16 @@ function drawMarks(ar, { pos, col, eps, a, hw, H, d, side, tr, out, segIdx, shaf
 }
 
 // Mirrors, guard tiles (filled when shut, outlined when open), gates still shut,
-// curtains not yet lifted, the belt, tunnel mouths, obelisks and their shadows, and
-// dials.
+// curtains not yet lifted, tunnel mouths, obelisks and their shadows, dials, walls,
+// panels, ice, and the pieces samurais cut off.
 function drawDecor() {
-  const { cube, mirrors, guards, curtains, belt, tunnels, canals, sundial, dials, doors, mills, arrows } = game.puz;
+  const { cube, mirrors, guards, curtains, tunnels, canals, sundial, dials, walls, panels, arrows } = game.puz;
   const cs = S / cube.N;
   const eps = S * 0.004;
   const pos = [];
   const col = [];
+  const now = performance.now();
+  game.falling = false;
   const cellInfo = (id) => {
     const { p, n } = cube.cells[id];
     const u = cube.tangents(id)[0];
@@ -679,7 +686,8 @@ function drawDecor() {
   };
 
   // Sundial: shadow cells for where the sun stands now (only on faces toward the
-  // camera, like the belt), then the obelisks on top.
+  // camera: seen through the cube they would hide everything behind them), then the
+  // obelisks on top.
   if (sundial) {
     const obelisks = new Set(sundial.obelisks);
     for (const id of sundial.shadows[game.state.sun]) {
@@ -704,33 +712,90 @@ function drawDecor() {
     for (let r = 0; r < game.state.dials[k]; r++) notch = new THREE.Vector3().crossVectors(notch, new THREE.Vector3(...d.n));
     strip(pos, col, info.C, info.C.clone().addScaledVector(notch, cs * 0.3), info.n, cs * 0.06, eps * 1.0, c(COLOR.dialRing));
   }
-  // Shoji: a rail along each track, and a paper panel with a frame on the cells of the
-  // two places that are shut.
-  for (const [k, d] of (doors ?? []).entries()) {
-    const [a, b] = [d.track[0], d.track.at(-1)].map(cellInfo);
-    strip(pos, col, a.C, b.C, a.n, cs * 0.03, eps * 0.4, tint(a.face, COLOR.shojiFrame), cs * 0.45, cs * 0.45);
-    d.track.forEach((id, j) => {
-      if (Math.floor(j / d.width) === game.state.doors[k]) return;
+  // Siberian ice: a block of pale ice under each frozen arrow, with a frosty rim round
+  // its cells, while any arrow touches it; once nothing does, only the rim is left (it
+  // can melt out). The ice on faces toward the camera only, like shadows.
+  const rim = cs * 0.035;
+  for (const ar of game.arrows) {
+    if (!ar.ice || (ar.state !== 'idle' && ar.state !== 'bumping')) continue;
+    const held = ar.extra.some((c) => {
+      const o = ownerAt(game.puz, game.state, c);
+      return o >= 0 && o !== ar.index;
+    });
+    const own = new Set(ar.cells);
+    for (const id of ar.cells) {
       const info = cellInfo(id);
-      square(info, cs * 0.44, tint(info.face, COLOR.shojiPaper), eps * 0.7);
-      outline(info, cs * 0.42, cs * 0.035, tint(info.face, COLOR.shojiFrame), eps * 0.9);
-      strip(pos, col, info.C.clone().addScaledVector(info.u, -cs * 0.42), info.C.clone().addScaledVector(info.u, cs * 0.42), info.n, cs * 0.02, eps * 0.9, tint(info.face, COLOR.shojiFrame));
+      if (!isFacing(info.face)) continue;
+      if (held) square(info, cs * 0.5, COLOR.iceBlock, eps * 0.2);
+      for (const t of cube.tangents(id)) {
+        if (own.has(cube.step(id, t).id)) continue;
+        const out = new THREE.Vector3(...t);
+        const along = new THREE.Vector3().crossVectors(new THREE.Vector3(...info.n), out);
+        const mid = info.C.clone().addScaledVector(out, cs * 0.5 - rim);
+        strip(pos, col, mid.clone().addScaledVector(along, -cs * 0.5), mid.clone().addScaledVector(along, cs * 0.5), info.n, rim, eps * 0.3, COLOR.iceEdge);
+      }
+    }
+  }
+  // Pieces samurais have cut off: where they were, in their arrow's colour, until the
+  // samurai passes the cut, then thinning away with a white slash across the cut.
+  const line = Math.min(cs * 0.085 * BOLD * game.thick, 0.04 * BOLD);
+  game.pieces = game.pieces.filter((pc) => now < pc.t0 + CUT_MS);
+  for (const pc of game.pieces) {
+    const u = Math.max(0, (now - pc.t0) / CUT_MS);
+    game.falling = true;
+    for (let i = 1; i < pc.pts.length; i++) {
+      const c = isFacing(faceIdx(pc.pts[i].n)) ? pc.color : COLOR.back;
+      strip(pos, col, world(pc.pts[i - 1].p), world(pc.pts[i].p), pc.pts[i].n, line * (1 - u), eps, c, line * (1 - u), line * (1 - u));
+    }
+    if (now < pc.t0) continue;
+    const info = cellInfo(pc.cell);
+    const slant = info.u.clone().add(info.v).normalize().multiplyScalar(cs * 0.48);
+    strip(pos, col, info.C.clone().sub(slant), info.C.clone().add(slant), info.n, cs * 0.05 * (1 - u), eps * 1.8, tint(info.face, WHITE));
+  }
+  // Mondrian panels: while an arrow sits in one, a pale fill in its colour (on faces
+  // toward the camera only, like shadows) inside a thick black frame; once it is
+  // empty, a thin grey frame. Frames lie just inside their panel.
+  for (const pnl of panels ?? []) {
+    const shut = pnl.cells.some((id) => game.state.occ[id] >= 0);
+    const { p: p0, n } = cube.cells[pnl.cells[0]];
+    const face = faceIdx(n);
+    if (shut && isFacing(face)) for (const id of pnl.cells) square(cellInfo(id), cs * 0.5, PANEL[pnl.hue], eps * 0.2);
+    const hw = cs * (shut ? 0.055 : 0.02);
+    const a = axisOf(n);
+    const [b, d] = [0, 1, 2].filter((x) => x !== a);
+    const inset = (hw * 2 * cube.N) / S; // in doubled grid units
+    const span = (x) => {
+      const vs = pnl.cells.map((id) => cube.cells[id].p[x]);
+      return [Math.min(...vs) - 1 + inset, Math.max(...vs) + 1 - inset];
+    };
+    const [[b0, b1], [d0, d1]] = [span(b), span(d)];
+    const corner = (x, y) => {
+      const q = [...p0];
+      q[b] = x;
+      q[d] = y;
+      return world(q);
+    };
+    const ring = [corner(b0, d0), corner(b1, d0), corner(b1, d1), corner(b0, d1)];
+    const c = tint(face, shut ? COLOR.panelLine : COLOR.panelOpen);
+    for (let k = 0; k < 4; k++) strip(pos, col, ring[k], ring[(k + 1) % 4], n, hw, eps * 0.5, c, hw, hw);
+  }
+  // Berlin walls: a concrete slab on each cell, a thin joint between them, while the
+  // wall stands (its number is a label of its own, placeLabels). When it falls, the
+  // slabs crumble one after another along it.
+  for (const [k, w] of (walls ?? []).entries()) {
+    const standing = w.count > game.state.gone[w.face];
+    if (standing) game.fell[k] = 0;
+    else game.fell[k] ||= now;
+    w.cells.forEach((id, j) => {
+      const u = standing ? 0 : Math.min(1, Math.max(0, (now - game.fell[k] - 70 * j) / FALL_MS));
+      if (u >= 1) return;
+      if (!standing) game.falling = true;
+      const info = cellInfo(id);
+      square(info, cs * 0.465 * (1 - u * u), tint(info.face, COLOR.wall), eps * 0.7);
     });
   }
-  // Windmills: the sails along the way they lie now, a small mark on each cell they
-  // would swing to, and the hub.
-  for (const [k, m] of (mills ?? []).entries()) {
-    const hub = cellInfo(m.hub);
-    const c = (col_) => tint(hub.face, col_);
-    const now = m.sails[game.state.mills[k]];
-    const ends = [now[0], now.at(-1)].map((id) => world(cube.cells[id].p));
-    strip(pos, col, ends[0], ends[1], hub.n, cs * 0.2, eps * 0.7, c(COLOR.millSail), cs * 0.4, cs * 0.4);
-    strip(pos, col, ends[0], ends[1], hub.n, cs * 0.035, eps * 0.9, c(COLOR.millFrame), cs * 0.4, cs * 0.4);
-    for (const id of m.sails[1 - game.state.mills[k]]) square(cellInfo(id), cs * 0.06, c(COLOR.millFrame), eps * 0.5);
-    square(hub, cs * 0.26, c(COLOR.millHub), eps * 1.1);
-  }
-  // Canals: water (on faces toward the camera only, like the belt) with a chevron
-  // in each cell pointing the way it flows.
+  // Canals: water (on faces toward the camera only, like shadows) with a chevron in
+  // each cell pointing the way it flows.
   for (const [id, f] of canals) {
     const info = cellInfo(id);
     if (isFacing(info.face)) square(info, cs * 0.5, COLOR.canal, eps * 0.3);
@@ -791,30 +856,6 @@ function drawDecor() {
       strip(pos, col, mid.clone().addScaledVector(info.u, -cs * 0.42), mid.clone().addScaledVector(info.u, cs * 0.42), info.n, cs * 0.07, eps * 0.8, c);
     }
   }
-  // The belt: a pale band with a mark every few cells, so it shows when it moves, and
-  // a cog round each arrow riding it (독일). Only on faces toward the camera; seen
-  // through the cube the band would hide everything behind it.
-  const cog = ({ C, n, u, v }) => {
-    const ring = (t) => C.clone().addScaledVector(u, Math.cos(t) * cs * 0.34).addScaledVector(v, Math.sin(t) * cs * 0.34);
-    for (let k = 0; k < 16; k++) strip(pos, col, ring((k / 16) * 2 * Math.PI), ring(((k + 1) / 16) * 2 * Math.PI), n, cs * 0.04, eps * 0.8, ORN.gear, cs * 0.012, cs * 0.012);
-    for (let k = 0; k < 8; k++) {
-      const out = u.clone().multiplyScalar(Math.cos((k * Math.PI) / 4)).addScaledVector(v, Math.sin((k * Math.PI) / 4));
-      strip(pos, col, C.clone().addScaledVector(out, cs * 0.33), C.clone().addScaledVector(out, cs * 0.46), n, cs * 0.06, eps * 0.8, ORN.gear);
-    }
-  };
-  if (belt) {
-    const L = belt.cells.length;
-    const glow = game.beltHintUntil ? 0.5 + 0.5 * Math.sin(performance.now() / 90) : 0;
-    const band = COLOR.belt.clone().lerp(COLOR.beltHint, glow);
-    belt.cells.forEach((id, p) => {
-      const info = cellInfo(id);
-      if (!isFacing(info.face)) return;
-      square(info, cs * 0.5, band, eps * 0.3);
-      if ((p - game.state.shift + L) % 4 === 0) square(info, cs * 0.1, COLOR.beltMark, eps * 0.6);
-      const o = ownerAt(game.puz, game.state, id);
-      if (o >= 0 && game.arrows[o].state !== 'exiting') cog(info);
-    });
-  }
   for (const ar of arrows) {
     // A vine: a green stem through its cells with a leaf on each.
     if (ar.machete) {
@@ -834,6 +875,71 @@ function drawDecor() {
     }
   }
   setGeometry(decor, pos, col);
+}
+
+// How long a fallen wall takes to crumble, per slab, and a cut piece to drop away (ms).
+const FALL_MS = 420;
+const CUT_MS = 380;
+
+// Berlin walls' numbers, on each wall's middle cell: how many more arrows have to leave
+// the wall's face before it falls. Each is a small canvas, drawn again when its
+// number changes.
+const labels = [];
+function makeLabels() {
+  for (const l of labels.splice(0)) {
+    scene.remove(l.mesh);
+    l.mesh.geometry.dispose();
+    l.mesh.material.map.dispose();
+    l.mesh.material.dispose();
+  }
+  const { cube, walls } = game.puz;
+  const cs = S / cube.N;
+  for (const w of walls ?? []) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cs, cs), new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
+    mesh.matrixAutoUpdate = false;
+    const { p, n } = cube.cells[w.cells[Math.floor(w.cells.length / 2)]];
+    const normal = new THREE.Vector3(...n);
+    labels.push({ mesh, canvas, wall: w, n: normal, at: world(p).addScaledVector(normal, S * 0.004 * 1.3), text: '' });
+    scene.add(mesh);
+  }
+}
+
+// Shows each standing wall's number on a face toward the camera, turned upright on
+// screen (to the nearest grid direction).
+const screenUp = new THREE.Vector3();
+function placeLabels() {
+  if (!labels.length) return;
+  screenUp.setFromMatrixColumn(camera.matrixWorld, 1);
+  for (const l of labels) {
+    const left = l.wall.count - game.state.gone[l.wall.face];
+    l.mesh.visible = left > 0 && isFacing(faceIdx(l.n.toArray()));
+    if (!l.mesh.visible) continue;
+    const text = String(left);
+    if (text !== l.text) {
+      l.text = text;
+      const g = l.canvas.getContext('2d');
+      g.clearRect(0, 0, 128, 128);
+      g.font = `800 ${text.length > 1 ? 84 : 104}px system-ui, -apple-system, 'Segoe UI', sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineJoin = 'round';
+      g.lineWidth = 10;
+      g.strokeStyle = 'rgba(38, 40, 48, 0.5)';
+      g.strokeText(text, 64, 70);
+      g.fillStyle = '#ffffff';
+      g.fillText(text, 64, 70);
+      l.mesh.material.map.needsUpdate = true;
+    }
+    const up = screenUp.clone().addScaledVector(l.n, -screenUp.dot(l.n));
+    const axis = [0, 1, 2].filter((x) => !l.n.getComponent(x)).sort((x, y) => Math.abs(up.getComponent(y)) - Math.abs(up.getComponent(x)))[0];
+    up.set(0, 0, 0).setComponent(axis, Math.sign(screenUp.getComponent(axis)) || 1);
+    const right = new THREE.Vector3().crossVectors(up, l.n);
+    l.mesh.matrix.makeBasis(right, up, l.n).setPosition(l.at);
+  }
 }
 
 function redrawAll() {
@@ -863,6 +969,9 @@ function load(params) {
   game.params = params;
   game.puz = puz;
   game.state = newState(puz);
+  game.fell = [];
+  game.pieces = [];
+  makeLabels();
   // The generator panel borrows the look of the world its gimmick comes from.
   const look = game.world === 'free' ? (params.gimmick ?? 'home') : game.world;
   applyTheme(themeOf(look));
@@ -883,7 +992,7 @@ function load(params) {
     mesh: new THREE.Mesh(new THREE.BufferGeometry(), arrowMat),
   }));
   for (const ar of game.arrows) {
-    if (ar.slot >= 0 || ar.dial >= 0) seat(ar);
+    if (ar.dial >= 0) seat(ar);
     scene.add(ar.mesh);
   }
 
@@ -899,11 +1008,9 @@ function load(params) {
     `뺄 수 있는 비율 ${Math.round(m.freeRatio * 100)}%` +
     (params.hearts ? ` · 하트 ${params.hearts}개` : '');
 
-  $('beltL').hidden = $('beltR').hidden = !puz.belt;
   game.stuck = false;
   game.tut = null;
   game.turn = null;
-  game.beltHintUntil = 0;
   $('guide').hidden = true;
   game.heartsMax = game.hearts = params.hearts ?? 0;
   syncPanel(params);
@@ -945,12 +1052,9 @@ function tap(ar) {
   const members = group(puz, ar.index).map((j) => game.arrows[j]);
   if (canExit(puz, state, ar.index)) {
     const catchK = caughtBy(puz, state, ar.index)?.k;
-    // An eagle whose head is blocked leaves tail first.
-    if (exitEnd(puz, state, ar.index)) {
-      Object.assign(ar, { cells: [...ar.cells].reverse(), ray: ar.ray2, exitDir: ar.exitDir2, dir: ar.dir2, jumps: [] });
-      ar.track = buildTrack(puz.cube, ar);
-    }
+    const cut = cutBy(puz, state, ar.index);
     const out = remove(puz, state, ar.index).map((j) => game.arrows[j]);
+    if (cut) slash(game.arrows[cut.arrow], cut);
     for (const a of out) {
       a.redUntil = 0;
       game.remaining--;
@@ -967,7 +1071,7 @@ function tap(ar) {
     refreshFree();
     // A lantern leaving lights up the arrows round it.
     if (game.showFree || out.some((a) => a.lantern)) redrawAll();
-    if (out.some((a) => a.gates.length || a.tint >= 0 || a.slot >= 0 || a.disc)) drawDecor();
+    if (puz.walls || puz.panels || cut || puz.gimmick === 'ice' || out.some((a) => a.gates.length || a.tint >= 0 || a.disc)) drawDecor();
     hud();
     tutDid('leave', ar.index);
     // A clocked switch has moved on: the shadows, guards and dial arrows follow, and
@@ -1011,7 +1115,6 @@ function tap(ar) {
   playBump();
   loseHeart();
   tutDid('bump', ar.index);
-  if (puz.belt && !game.arrows.some((a) => a.state === 'idle' && a.free)) game.beltHintUntil = now + 1600;
 }
 
 // A wrong tap costs a heart on stages that have them; with none left, the card says
@@ -1035,56 +1138,31 @@ function drawHearts(lost = false) {
   el.classList.add('lost');
 }
 
-// A belt or dial arrow takes the cells and way out of wherever its belt or dial has
-// carried it.
+// A dial arrow takes the cells and way out of wherever its dial has turned it.
 function seat(ar) {
   const { cells, dir, ray, exitDir, jumps } = pose(game.puz, game.state, ar.index);
   Object.assign(ar, { cells, dir, ray, exitDir, jumps });
   ar.track = buildTrack(game.puz.cube, ar);
 }
 
-// Open track cell j of shoji d.
-function slideDoor(d, j) {
-  if (game.state.doors[d] === j) return;
-  game.state.doors[d] = j;
-  refreshFree();
-  redrawAll();
-  tutDid('switch');
-}
-
-// Swing windmill m's sails round to the other axis.
-function turnMill(m) {
-  game.state.mills[m] = 1 - game.state.mills[m];
-  refreshFree();
-  redrawAll();
-  tutDid('switch');
-}
-
-// What a tap at a screen point works, if it lands on a shoji track or a windmill hub:
-// a function doing it, or null. Dials turn by themselves.
-function switchAt(x, y) {
-  const { doorOf, mills } = game.puz;
-  const h = (doorOf?.size || mills) && hitFace(x, y);
-  const N = game.puz.cube.N;
-  if (!h || h.ib < 0 || h.ic < 0 || h.ib >= N || h.ic >= N) return null;
-  const cell = cellId(h.n, h.a, h.b, h.c, h.ib, h.ic);
-  const door = doorOf?.get(cell);
-  if (door) return () => slideDoor(...door);
-  const m = mills?.findIndex((ml) => ml.hub === cell) ?? -1;
-  if (m >= 0) return () => turnMill(m);
-  return null;
-}
-
-function moveBelt(d) {
-  const { puz, state } = game;
-  if (!puz.belt || game.arrows.some((a) => a.slot >= 0 && a.state === 'bumping')) return false;
-  const L = puz.belt.cells.length;
-  state.shift = (state.shift + d + L) % L;
-  for (const ar of game.arrows) if (ar.slot >= 0 && ar.state === 'idle') seat(ar);
-  game.beltHintUntil = 0;
-  refreshFree();
-  redrawAll();
-  return true;
+// A samurai's cut: arrow x keeps its cells past the cut, and the piece cut off (`at`
+// + 1 cells from its tail) is left to drawDecor, to stay where it was until the
+// samurai's head gets there (k cells along its way) and then drop away.
+function slash(x, { at, k }) {
+  const C = game.puz.cube.cells;
+  const piece = x.cells.slice(0, at + 1);
+  // Points along the piece, each with the face the stretch up to it lies on; over a
+  // cube edge, a point on the edge as well.
+  const pts = [];
+  piece.forEach((id, i) => {
+    const prev = C[piece[i - 1]];
+    if (i && faceIdx(prev.n) !== faceIdx(C[id].n)) pts.push({ p: add(prev.p, C[id].n), n: prev.n });
+    pts.push({ p: C[id].p, n: C[id].n });
+  });
+  game.pieces.push({ pts, color: colorOf(x, faceIdx(C[piece[0]].n)), cell: piece.at(-1), t0: performance.now() + (2000 * (k + 1)) / SPEED });
+  x.cells = x.cells.slice(at + 1);
+  x.track = buildTrack(game.puz.cube, x);
+  drawArrow(x);
 }
 
 const raycaster = new THREE.Raycaster();
@@ -1164,74 +1242,6 @@ function pick(x, y) {
   return lit ?? best;
 }
 
-// Belt slot under a screen point, or undefined.
-function beltSlotAt(x, y) {
-  const h = game.puz.belt && hitFace(x, y);
-  if (!h) return undefined;
-  const N = game.puz.cube.N;
-  if (h.ib < 0 || h.ic < 0 || h.ib >= N || h.ic >= N) return undefined;
-  return game.puz.belt.index.get(cellId(h.n, h.a, h.b, h.c, h.ib, h.ic));
-}
-
-// Screen pixels for one belt step forward at slot p: how far a one-step drag goes.
-// Measured between two slots on the same face, since a step over a cube edge looks
-// much shorter on screen.
-function beltStepOnScreen(p) {
-  const { cells } = game.puz.belt;
-  const L = cells.length;
-  const C = game.puz.cube.cells;
-  const r = renderer.domElement.getBoundingClientRect();
-  camera.updateMatrixWorld();
-  const px = (slot) => {
-    const v = world(C[cells[(slot + L) % L]].p).project(camera);
-    return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height };
-  };
-  const face = (slot) => game.puz.cube.faceOf(cells[(slot + L) % L]);
-  const q = face(p + 1) === face(p) ? p : p - 1;
-  const a = px(q);
-  const b = px(q + 1);
-  return { x: b.x - a.x, y: b.y - a.y };
-}
-
-// Dragging along the belt turns it, one step per cell dragged, and holds the cube
-// still meanwhile. Registered as a capture listener so it runs before the controls
-// start a rotation. A press on the belt that does not move is still a tap.
-let beltDrag = null;
-renderer.domElement.addEventListener(
-  'pointerdown',
-  (e) => {
-    if (!e.isPrimary) return;
-    const p = beltSlotAt(e.clientX, e.clientY);
-    if (p === undefined || !tutSwitchOk()) return;
-    controls.enabled = false;
-    beltDrag = { x: e.clientX, y: e.clientY, v: beltStepOnScreen(p), steps: 0 };
-    renderer.domElement.style.cursor = 'grabbing';
-  },
-  { capture: true },
-);
-renderer.domElement.addEventListener('pointermove', (e) => {
-  if (!e.isPrimary) return;
-  if (!beltDrag) {
-    if (!e.buttons) renderer.domElement.style.cursor = beltSlotAt(e.clientX, e.clientY) === undefined ? '' : 'grab';
-    return;
-  }
-  const { v } = beltDrag;
-  const len2 = v.x * v.x + v.y * v.y;
-  if (len2 < 1) return;
-  const want = Math.round(((e.clientX - beltDrag.x) * v.x + (e.clientY - beltDrag.y) * v.y) / len2);
-  while (beltDrag.steps < want && moveBelt(1)) beltDrag.steps++;
-  while (beltDrag.steps > want && moveBelt(-1)) beltDrag.steps--;
-});
-const endBeltDrag = () => {
-  if (!beltDrag) return;
-  const moved = beltDrag.steps !== 0;
-  beltDrag = null;
-  controls.enabled = true;
-  renderer.domElement.style.cursor = 'grab';
-  if (moved) tutDid('switch');
-};
-window.addEventListener('pointerup', endBeltDrag);
-window.addEventListener('pointercancel', endBeltDrag);
 // Sound may only start from a touch, and phones put it to sleep: every touch wakes it.
 window.addEventListener('pointerdown', wakeAudio, true);
 
@@ -1244,12 +1254,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 renderer.domElement.addEventListener('pointerup', (e) => {
   if (!down || !e.isPrimary) return;
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
-  if (!down.multi && moved < 8 && performance.now() - down.t < 450) {
-    const flip = switchAt(e.clientX, e.clientY);
-    if (flip && !tutSwitchOk()) nudgeGuide();
-    else if (flip) flip();
-    else tap(pick(e.clientX, e.clientY));
-  }
+  if (!down.multi && moved < 8 && performance.now() - down.t < 450) tap(pick(e.clientX, e.clientY));
   down = null;
 });
 
@@ -1263,24 +1268,16 @@ function autoSolve() {
   const alive = living();
   const steps = [];
   for (const l of solve(game.puz, game.state, alive).layers) {
-    steps.push({ setting: l.setting });
     // A lasso's catch leaves with it, so it is not tapped on its own.
-    for (const i of l.arrows) steps.push({ tap: i });
+    for (const i of l.arrows) steps.push(i);
     // Tapping a bull that cannot leave yet makes it charge.
-    for (const i of l.charged ?? []) steps.push({ tap: i });
+    for (const i of l.charged) steps.push(i);
   }
   const next = () => {
-    const step = steps.shift();
-    if (!step) return;
-    const s = step.setting;
-    if (s) {
-      if ('shift' in s && game.state.shift !== s.shift) moveBelt(s.shift - game.state.shift);
-      if ('doors' in s) s.doors.forEach((j, d) => slideDoor(d, j));
-      if ('mills' in s) s.mills.forEach((w, m) => game.state.mills[m] !== w && turnMill(m));
-    } else if (game.arrows[step.tap].state === 'idle') {
-      tap(game.arrows[step.tap]);
-    }
-    game.solveTimer = setTimeout(next, s ? 0 : 70);
+    if (!steps.length) return;
+    const i = steps.shift();
+    if (game.arrows[i].state === 'idle') tap(game.arrows[i]);
+    game.solveTimer = setTimeout(next, 70);
   };
   next();
 }
@@ -1294,7 +1291,7 @@ function loadTutorial(world) {
   // From the starting view, so the turns to what each step is about are easy to follow.
   camera.position.copy(HOME_VIEW);
   camera.up.set(0, 1, 0);
-  game.tut = { steps: TUTORIALS[world].steps, k: 0, targets: [], focus: -1, hint: null, wait: false };
+  game.tut = { steps: TUTORIALS[world].steps, k: 0, targets: [], focus: -1, wait: false };
   $('guide').style.setProperty('--accent', themeOf(world).accent);
   tutStep(0);
 }
@@ -1303,22 +1300,15 @@ function loadTutorial(world) {
 const aliveNow = () =>
   new Set(game.arrows.filter((a) => a.state === 'idle' || a.state === 'bumping' || a.state === 'charging').map((a) => a.index));
 
-// Starts tutorial step k: the guide says it, the arrow it is about lights up (or the
-// switch move to make, or the arrow the belt is to bring round) and the cube turns to
-// show it, or the tile the step talks about.
+// Starts tutorial step k: the guide says it, the arrow it is about lights up and the
+// cube turns to show it, or the tile the step talks about.
 function tutStep(k) {
   const tut = game.tut;
   const step = tut.steps[k];
   const { puz, state } = game;
-  Object.assign(tut, { k, focus: -1, hint: null, wait: false });
+  Object.assign(tut, { k, focus: -1, wait: false });
   if (step.find) tut.focus = findTarget(puz, state, aliveNow(), step.find, tut.targets);
-  if (step.until === 'switch') {
-    tut.hint = switchHint(puz, state, aliveNow(), tut.steps[k + 1].find, tut.targets);
-    if (step.mark !== undefined) tut.focus = tut.targets[step.mark];
-    // The belt glows until it moves.
-    if (puz.belt) game.beltHintUntil = Infinity;
-  }
-  const cell = step.look ? lookCell(puz, step.look) : (tut.hint?.cell ?? (tut.focus >= 0 ? pose(puz, state, tut.focus).cells.at(-1) : undefined));
+  const cell = step.look ? lookCell(puz, step.look) : tut.focus >= 0 ? pose(puz, state, tut.focus).cells.at(-1) : undefined;
   if (cell !== undefined) turnTo(cell);
   $('guideStep').textContent = `튜토리얼 ${k + 1} / ${tut.steps.length}`;
   $('guideText').textContent = step.say;
@@ -1327,8 +1317,8 @@ function tutStep(k) {
 }
 
 // Whether a tap on arrow ar counts now: in a step about one arrow only that one (or its
-// pair) does, and none while the guide is only saying something or wants a switch
-// moved. The last step (free play) and auto-solve take any.
+// pair) does, and none while the guide is only saying something. The last step (free
+// play) and auto-solve take any.
 function tutAllows(ar) {
   const tut = game.tut;
   if (!tut || game.autoSolved || game.cleared) return true;
@@ -1337,36 +1327,16 @@ function tutAllows(ar) {
   return !tut.wait && !!step.find && tut.focus >= 0 && group(game.puz, tut.focus).includes(ar.index);
 }
 
-// Whether the belt, doors and windmills may move now: in a step that asks for it and in
-// the last one, so the arrow a step lights up stays the one it means.
-function tutSwitchOk() {
-  const tut = game.tut;
-  if (!tut || game.autoSolved) return true;
-  const { until } = tut.steps[tut.k];
-  return !tut.wait && (until === 'switch' || until === 'clear');
-}
-
 // The player did something (`what` as a step's `until`, to arrow i): on to the next
 // step if it is what this one waits for, after a moment to see what it did and once a
-// bumped arrow is back (the belt cannot move before) or a bull has stopped. A switch
-// step goes on once the move lets the next step find its arrow; until then it lights
-// the move that would.
+// bumped arrow is back or a bull has stopped.
 function tutDid(what, i = -1) {
   const tut = game.tut;
   if (!tut || tut.wait || game.autoSolved) return;
   const step = tut.steps[tut.k];
-  if (step.until !== what) return;
-  if (what === 'switch') {
-    const next = tut.steps[tut.k + 1].find;
-    if (findTarget(game.puz, game.state, aliveNow(), next, tut.targets) < 0) {
-      tut.hint = switchHint(game.puz, game.state, aliveNow(), next, tut.targets);
-      return;
-    }
-  } else if (tut.focus < 0 || !group(game.puz, tut.focus).includes(i)) {
-    return;
-  }
-  tut.targets[tut.k] = what === 'switch' ? -1 : tut.focus;
-  Object.assign(tut, { wait: true, focus: -1, hint: null });
+  if (step.until !== what || tut.focus < 0 || !group(game.puz, tut.focus).includes(i)) return;
+  tut.targets[tut.k] = tut.focus;
+  Object.assign(tut, { wait: true, focus: -1 });
   const next = () => {
     if (tut !== game.tut || game.stuck) return;
     if (game.arrows.some((a) => a.state === 'bumping' || a.state === 'charging')) return setTimeout(next, 100);
@@ -1414,35 +1384,18 @@ function turnCamera(now) {
   if (u >= 1) game.turn = null;
 }
 
-// The tutorial's lit arrow, or the door or windmill hub to tap, glows and pulses.
+// The tutorial's lit arrow glows and pulses.
 function drawGlow(now) {
   const tut = game.tut;
   const ar = tut && tut.focus >= 0 ? game.arrows[tut.focus] : null;
   const lit = ar && (ar.state === 'idle' || ar.state === 'bumping' || ar.state === 'charging') ? ar : null;
-  const cell = tut?.hint?.cell;
-  glow.visible = !!lit || cell !== undefined;
-  if (!glow.visible) return;
+  glow.visible = !!lit;
+  if (!lit) return;
   const pulse = 0.5 + 0.5 * Math.sin(now / 170);
   glowMat.opacity = 0.3 + 0.45 * pulse;
   const pos = [];
   const col = [];
-  if (lit) drawArrow(lit, { pos, col, widen: 2.6 + 0.9 * pulse });
-  if (cell !== undefined) {
-    const cs = S / game.puz.cube.N;
-    const { p, n } = game.puz.cube.cells[cell];
-    const t0 = game.puz.cube.tangents(cell)[0];
-    const C = world(p);
-    const u = new THREE.Vector3(...t0);
-    const v = new THREE.Vector3(...cross(n, t0));
-    const half = cs * (0.46 + 0.06 * pulse);
-    const w = cs * 0.08;
-    for (const [a, b] of [[u, v], [v, u]]) {
-      for (const sgn of [1, -1]) {
-        const mid = C.clone().addScaledVector(b, sgn * half);
-        strip(pos, col, mid.clone().addScaledVector(a, -half - w), mid.clone().addScaledVector(a, half + w), n, w, S * 0.006, GLOW);
-      }
-    }
-  }
+  drawArrow(lit, { pos, col, widen: 2.6 + 0.9 * pulse });
   setGeometry(glow, pos, col);
 }
 
@@ -1461,10 +1414,8 @@ function frame(now) {
     redrawAll();
   }
   fadeScenery();
-  if (game.beltHintUntil) {
-    if (now > game.beltHintUntil) game.beltHintUntil = 0;
-    drawDecor();
-  }
+  if (game.falling) drawDecor();
+  placeLabels();
 
   for (const ar of game.arrows) {
     if (ar.state === 'caught') {
@@ -1791,13 +1742,7 @@ $('showFree').onchange = (e) => {
   refreshFree();
   redrawAll();
 };
-// The belt buttons turn it one step, when the tutorial lets switches move.
-const beltButton = (d) => () => {
-  if (!tutSwitchOk()) return nudgeGuide();
-  if (moveBelt(d)) tutDid('switch');
-};
-$('beltL').onclick = beltButton(-1);
-$('beltR').onclick = beltButton(1);
+
 // ◀ ▶ step through the current world; from the generator they return to the last world.
 $('prev').onclick = () => loadStage(game.lastWorld, game.world === 'free' ? game.stage : game.stage - 1);
 $('next').onclick = () => loadStage(game.lastWorld, game.world === 'free' ? game.stage : game.stage + 1);

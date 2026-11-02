@@ -60,9 +60,9 @@ const FLAGS = {
   // 🏠 a house on the home world's indigo
   home: () =>
     svg(
-      `<rect width="30" height="20" fill="#5b6cff"/>` +
+      `<rect width="30" height="20" fill="#eb9a8c"/>` +
         `<path d="M15 3.4 L23.4 10.2 H20.8 V16.6 H9.2 V10.2 H6.6 Z" fill="#fff"/>` +
-        `<rect x="13.5" y="11.6" width="3" height="5" rx="0.6" fill="#5b6cff"/>`,
+        `<rect x="13.5" y="11.6" width="3" height="5" rx="0.6" fill="#eb9a8c"/>`,
     ),
   // China: the big star and four small ones, each pointing at it
   gate: () =>
@@ -107,7 +107,7 @@ const FLAGS = {
         `<rect width="7.5" height="20" fill="#D80621"/><rect x="22.5" width="7.5" height="20" fill="#D80621"/>` +
         `<path transform="translate(15 10.2) scale(0.135) translate(-50 -50)" fill="#D80621" d="M50 2 L57 16 L65 12 L61 38 L75 24 L78 33 L94 30 L88 47 L96 51 L70 72 L74 82 L52 79 L53 98 L47 98 L48 79 L26 82 L30 72 L4 51 L12 47 L6 30 L22 33 L25 24 L39 38 L35 12 L43 16 Z"/>`,
     ),
-  belt: () => svg(bands(['#000', '#DD0000', '#FFCE00'])), // Germany
+  wall: () => svg(bands(['#000', '#DD0000', '#FFCE00'])), // Germany
   // Türkiye: the crescent and the star pointing back at it
   tunnel: () =>
     svg(
@@ -163,7 +163,7 @@ const FLAGS = {
         `</g>`,
     ),
   canal: () => svg(bands(['#009246', '#fff', '#CE2B37'], true)), // Italy
-  eagle: () => svg(bands(['#fff', '#0039A6', '#D52B1E'])), // Russia
+  ice: () => svg(bands(['#fff', '#0039A6', '#D52B1E'])), // Russia
   encierro: () => svg(bands(['#AA151B', '#F1BF00', '#F1BF00', '#AA151B'])), // Spain
   // Brazil: the globe with its band and a few stars
   vine: () =>
@@ -193,8 +193,8 @@ const FLAGS = {
         `<circle cx="15" cy="10" r="0.45" fill="#000080"/>`,
     );
   },
-  shoji: () => svg(`<rect width="30" height="20" fill="#fff"/><circle cx="15" cy="10" r="6" fill="#BC002D"/>`), // Japan
-  windmill: () => svg(bands(['#AE1C28', '#fff', '#21468B'])), // the Netherlands
+  samurai: () => svg(`<rect width="30" height="20" fill="#fff"/><circle cx="15" cy="10" r="6" fill="#BC002D"/>`), // Japan
+  mondrian: () => svg(bands(['#AE1C28', '#fff', '#21468B'])), // the Netherlands
 };
 
 // The icon for a world (a key of WORLDS), as SVG markup.

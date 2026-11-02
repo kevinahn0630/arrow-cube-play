@@ -11,16 +11,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Arrow Cube">
-<meta name="theme-color" content="#5b6cff">
+<meta name="theme-color" content="#fbe1d8">
 <style>
   :root {
-    --bg1: #eef1ff;
-    --bg2: #dce4fa;
-    --ink: #1f2a4d;
-    --muted: #6b7599;
-    --accent: #5b6cff;
-    --card: #ffffffe0;
-    --line: #d5dbf3;
+    --bg1: #fbeee8;
+    --bg2: #efe6f1;
+    --ink: #4a3f5c;
+    --muted: #968aa0;
+    --accent: #e2786a;
+    --card: #ffffffc8;
+    --line: #f0dcd8;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -41,7 +41,7 @@
     backdrop-filter: blur(8px);
     border: 1px solid var(--line);
     border-radius: 14px;
-    box-shadow: 0 4px 16px #2a3a8014;
+    box-shadow: 0 6px 16px #b48aa026;
   }
   .hud {
     position: fixed;
@@ -63,12 +63,12 @@
   .title b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .title small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* A world's flag (flags.js), 3:2 with soft corners. */
-  .flag { display: block; flex: none; aspect-ratio: 3 / 2; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px #1f2a4d22; }
+  .flag { display: block; flex: none; aspect-ratio: 3 / 2; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px #4a3f5c22; }
   .flag svg { display: block; width: 100%; height: 100%; }
   .count { padding: 6px 14px; font-size: 22px; font-weight: 800; color: var(--accent); white-space: nowrap; }
   /* The hearts hang under the arrow count, so on a phone the top row keeps room for the world's name. */
   .hud-right { position: relative; }
-  .hearts { position: absolute; top: calc(100% + 8px); right: 0; padding: 6px 12px; font-size: 20px; line-height: 1.35; color: #e5484d; letter-spacing: 2px; white-space: nowrap; }
+  .hearts { position: absolute; top: calc(100% + 8px); right: 0; padding: 6px 12px; font-size: 20px; line-height: 1.35; color: #e2786a; letter-spacing: 2px; white-space: nowrap; }
   .hearts i { font-style: normal; color: var(--muted); opacity: 0.4; }
   .hearts.lost { animation: shake 0.4s; }
   /* The build players get (src/build.js): no ◀ 다시 ▶, auto-solve, generator or zoom buttons. */
@@ -134,7 +134,7 @@
     inset: 0;
     display: grid;
     place-items: center;
-    background: #1f2a4d55;
+    background: #4a3f5c4d;
   }
   .clear .card { background: #fff; border-radius: 20px; padding: 28px 32px; text-align: center; min-width: 240px; }
   .clear h2 { margin: 0 0 18px; }
@@ -166,7 +166,7 @@
   .guide .primary { display: block; width: 100%; margin-top: 10px; }
   .guide .primary[hidden] { display: none; }
 
-  /* The loading screen: the logo while the game loads, then 눌러서 시작. */
+  /* The loading screen: the logo at dawn while the game loads, then 눌러서 시작. */
   .splash {
     position: fixed;
     inset: 0;
@@ -175,37 +175,44 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: clamp(20px, 9vh, 90px);
+    gap: clamp(20px, 8vh, 80px);
     padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
-    background: radial-gradient(circle at 50% 40%, #ffffff 0%, #e9ecff 40%, #c9d1fa 100%);
+    background: linear-gradient(180deg, #ffd7cb 0%, #fbe9df 55%, #e6e4f3 100%);
+    overflow: hidden;
     transition: opacity 0.45s ease;
   }
   .splash.gone { opacity: 0; pointer-events: none; }
   .splash[hidden] { display: none; }
+  /* Low hills along the bottom, and a few clouds and birds up top, behind everything. */
+  .sky-hills { position: absolute; left: 0; bottom: 0; width: 100%; height: 22vh; pointer-events: none; }
+  .sky-bits { position: absolute; top: 9vh; left: 50%; width: min(100%, 520px); transform: translateX(-50%); pointer-events: none; }
+  .splash-logo, .splash-foot { position: relative; }
   .splash-logo { display: flex; flex-direction: column; align-items: center; }
-  .splash-cube { width: min(46vw, 210px, 30vh); aspect-ratio: 344 / 392; filter: drop-shadow(0 16px 20px #3d4bd04d); animation: bob 2.8s ease-in-out infinite; }
-  @keyframes bob { 50% { transform: translateY(-10px); } }
-  .splash-name { width: min(82vw, 380px, 70vh); margin-top: clamp(10px, 3vh, 22px); filter: drop-shadow(0 4px 0 #2f39a8); }
-  .wordmark { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-weight: 900; }
-  .splash-sub { margin: 8px 0 0; font-size: 15px; font-weight: 700; letter-spacing: 3px; color: #5a64c4; }
+  .splash-cube { width: min(60vw, 250px, 36vh); aspect-ratio: 250 / 268; overflow: visible; }
+  .splash-cube use { animation: bob 3.2s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-6px); } }
+  /* ARROW CUBE, in thin capitals (#wordLogo takes its colour and stroke from here). */
+  .splash-name { width: min(72vw, 300px, 62vh); margin-top: clamp(4px, 1.5vh, 14px); color: #5a4862; stroke-width: 8; overflow: visible; }
+  .splash-sub { margin: 14px 0 0; font-size: 13px; font-weight: 500; letter-spacing: 5px; color: #9a879d; }
   .splash-foot { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 66px; }
-  .loading { width: min(66vw, 280px); text-align: center; }
+  .loading { width: min(56vw, 220px); text-align: center; }
   .loading[hidden], .start[hidden] { display: none; }
-  .loading-bar { height: 12px; border-radius: 6px; background: #ffffffb3; box-shadow: inset 0 0 0 1.5px #5b6cff33; overflow: hidden; }
-  .loading-bar i { display: block; width: 0; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #8b97ff, #4654e0); }
-  .loading span { display: block; margin-top: 9px; font-size: 13px; color: var(--muted); }
+  .loading-bar { height: 4px; border-radius: 2px; background: #ffffff99; overflow: hidden; }
+  .loading-bar i { display: block; width: 0; height: 100%; border-radius: 2px; background: #5a4862; }
+  .loading span { display: block; margin-top: 10px; font-size: 12px; letter-spacing: 2px; color: #9a879d; }
   .start {
-    padding: 15px 42px;
-    font-size: 20px;
-    font-weight: 800;
-    color: #fff;
-    background: linear-gradient(180deg, #7b88ff, #4654e0);
-    border: 0;
+    padding: 13px 34px;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: #5a4862;
+    background: #ffffff80;
+    border: 1px solid #ffffffe6;
     border-radius: 999px;
-    box-shadow: 0 6px 0 #2f39a8, 0 12px 26px #3d4bd055;
-    animation: pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 8px 24px #b48aa033;
+    animation: breathe 2.4s ease-in-out infinite;
   }
-  @keyframes pulse { 50% { transform: scale(1.06); } }
+  @keyframes breathe { 50% { opacity: 0.65; } }
 
   /* The home screen: the worlds in groups by difficulty, each with its flag. */
   .home {
@@ -214,26 +221,31 @@
     z-index: 10;
     display: flex;
     flex-direction: column;
-    background: radial-gradient(120% 70% at 50% 0%, #ffffff 0%, var(--bg1) 45%, var(--bg2) 100%);
+    background: linear-gradient(180deg, #fde3da 0%, #f8eeec 55%, #ebe8f5 100%);
   }
   .home[hidden] { display: none; }
+  .home > .sky-hills { height: 18vh; }
+  .home-head, .home-body { position: relative; }
   .home-head { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 760px; margin: 0 auto; padding: max(14px, env(safe-area-inset-top)) 16px 4px; }
   .home-brand { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .home-cube { width: 38px; height: 38px; flex: none; filter: drop-shadow(0 3px 4px #3d4bd033); }
-  .home-brand b { font-size: 21px; color: #3f4bd6; white-space: nowrap; }
+  .home-cube { width: 31px; height: 38px; flex: none; }
+  .home-word { height: 14px; width: auto; min-width: 0; color: #5a4862; stroke-width: 10; overflow: visible; }
+  .home .pill { background: #ffffffa8; border-color: #ffffffe6; box-shadow: 0 6px 16px #b48aa024; color: #5a4862; }
   .home-stars { padding: 7px 12px; font-size: 14px; font-weight: 700; white-space: nowrap; }
   .home-body { flex: 1; overflow: auto; padding: 0 16px max(24px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
   .home-body > * { max-width: 728px; margin-left: auto; margin-right: auto; }
-  .continue { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px; padding: 12px 16px; text-align: left; border: 0; color: #fff; background: linear-gradient(180deg, #7b88ff, #4654e0); box-shadow: 0 4px 0 #2f39a8; }
+  .continue { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px; padding: 12px 14px; text-align: left; color: #5a4862; background: #ffffffc4; border: 1px solid #ffffffe6; border-radius: 20px; box-shadow: 0 8px 20px #b48aa02e; }
   .continue[hidden] { display: none; }
-  .continue .flag { width: 36px; box-shadow: 0 0 0 1.5px #ffffff88; }
+  /* a coral play button at its right end */
+  .continue::after { content: ''; flex: none; width: 34px; height: 34px; border-radius: 50%; background: #e2786a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4.5 2.5 11.5 7 4.5 11.5Z' fill='%23fff' stroke='%23fff' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") 55% 50% / 15px no-repeat; }
+  .continue .flag { width: 44px; box-shadow: 0 0 0 1px #5a486222; }
   .continue-text { flex: 1; min-width: 0; }
   .continue b { display: block; font-size: 16px; }
-  .continue small { display: block; font-size: 12px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .continue small { display: block; font-size: 12px; color: #9a879d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .group-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 24px auto 10px; padding: 0 2px; }
-  .group-head b { font-size: 18px; color: var(--ink); }
+  .group-head b { font-size: 18px; color: #5a4862; }
   .group-head .stars { margin-left: 6px; font-size: 14px; }
-  .group-head span.note { font-size: 12px; color: var(--muted); text-align: right; }
+  .group-head span.note { font-size: 12px; color: #9a879d; text-align: right; }
 
   /* The stage menu: a sheet with one world's stages, over the game or the home screen. */
   .overlay {
@@ -242,7 +254,7 @@
     z-index: 20;
     display: grid;
     place-items: center;
-    background: #1f2a4d66;
+    background: #4a3f5c59;
     padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
   }
   .overlay[hidden] { display: none; }
@@ -251,9 +263,9 @@
     max-height: 100%;
     display: flex;
     flex-direction: column;
-    background: #f6f7fe;
+    background: #fbf6f4;
     border-radius: 22px;
-    box-shadow: 0 18px 50px #1f2a4d40;
+    box-shadow: 0 18px 50px #4a3f5c38;
     overflow: hidden;
   }
   .sheet-head { display: flex; align-items: center; gap: 10px; padding: 14px 14px 12px; background: #fff; border-bottom: 1px solid var(--line); }
@@ -273,21 +285,22 @@
     width: 100%;
     text-align: left;
     padding: 12px 12px 10px;
-    border-radius: 16px;
-    background: #fff;
-    border: 1px solid var(--line);
-    box-shadow: 0 2px 8px #2a3a8010;
+    border-radius: 18px;
+    color: #5a4862;
+    background: #ffffffb8;
+    border: 1px solid #ffffffe6;
+    box-shadow: 0 6px 16px #b48aa026;
   }
   .world-card .flag { width: 46px; }
-  .world-card.current { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .world-card.current { border-color: #e2786a; box-shadow: 0 0 0 2px #e2786a; }
   .world-card.locked { opacity: 0.6; }
   .wc-main { min-width: 0; }
   .wc-name { display: block; font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wc-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; margin-top: 10px; }
   .wc-foot .stars { flex: none; font-size: 11px; letter-spacing: 0; }
-  .wc-bar { flex: 1; display: block; height: 5px; border-radius: 3px; background: #e8ebf8; overflow: hidden; }
+  .wc-bar { flex: 1; display: block; height: 5px; border-radius: 3px; background: #5a48621a; overflow: hidden; }
   .wc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-  .wc-count { flex: none; font-size: 11px; color: var(--muted); }
+  .wc-count { flex: none; font-size: 11px; color: #9a879d; }
   .sheet-head .flag { width: 36px; }
   .about { font-size: 13px; color: var(--muted); margin: 0 2px 14px; line-height: 1.5; }
   .tutorial-btn { display: block; width: 100%; margin: 0 0 12px; font-size: 15px; font-weight: 700; background: #fff; }
@@ -320,25 +333,13 @@
   <div id="scenery" aria-hidden="true"></div>
   <div id="stage"></div>
 
-  <!-- The cube of the app icon (icons/icon.svg), for the loading and home screens. -->
+  <!-- The logo: the app icon's cube, a white arrow folding over its top edge
+       (icons/icon.svg), and ARROW CUBE in thin capitals, which take their colour and
+       stroke width from where they are used. Drawn by a script, so best not edited by hand. -->
   <svg width="0" height="0" style="position: absolute" aria-hidden="true">
-    <symbol id="cubeLogo" viewBox="84 72 344 392">
-      <g stroke="#4654e0" stroke-width="8" stroke-linejoin="round">
-        <path d="M256 92 L408 180 L256 268 L104 180 Z" fill="#ffffff"/>
-        <path d="M104 180 L256 268 L256 444 L104 356 Z" fill="#e3e8ff"/>
-        <path d="M256 268 L408 180 L408 356 L256 444 Z" fill="#c9d1fb"/>
-      </g>
-      <g fill="none" stroke="#1f2a4d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
-        <g transform="matrix(1.52 0.88 0 1.76 104 180)"><path d="M26 84 V30"/><path d="M70 80 V56 H50"/></g>
-        <g transform="matrix(1.52 -0.88 0 1.76 256 268)"><path d="M24 22 V66 H62"/></g>
-        <g transform="matrix(1.52 -0.88 1.52 0.88 104 180)"><path d="M26 70 H58 V36"/></g>
-      </g>
-      <g fill="#1f2a4d">
-        <g transform="matrix(1.52 0.88 0 1.76 104 180)"><path d="M26 14 L15 32 H37 Z"/><path d="M36 56 L52 46 V66 Z"/></g>
-        <g transform="matrix(1.52 -0.88 0 1.76 256 268)"><path d="M80 66 L62 55 V77 Z"/></g>
-        <g transform="matrix(1.52 -0.88 1.52 0.88 104 180)"><path d="M58 18 L47 36 H69 Z"/></g>
-      </g>
-    </symbol>
+    <radialGradient id="sunGlow"><stop offset=".6" stop-color="#fff6ee"/><stop offset="1" stop-color="#fff6ee" stop-opacity="0"/></radialGradient>
+    <symbol id="cubeLogo" viewBox="-96 -108 192 232"><ellipse cx="0" cy="114" rx="66" ry="8" fill="#7a4a62" opacity=".16"/><defs><clipPath id="logoClip"><path d="M-5 -97.11 A10 10 0 0 1 5 -97.11 L81.6 -52.89 A10 10 0 0 1 86.6 -44.23 L86.6 44.23 A10 10 0 0 1 81.6 52.89 L5 97.11 A10 10 0 0 1 -5 97.11 L-81.6 52.89 A10 10 0 0 1 -86.6 44.23 L-86.6 -44.23 A10 10 0 0 1 -81.6 -52.89 Z"/></clipPath></defs><g clip-path="url(#logoClip)"><path d="M0 -100 L86.6 -50 L0 0 L-86.6 -50Z" fill="#f6cdbd"/><path d="M-86.6 -50 L0 0 L0 100 L-86.6 50Z" fill="#e9a196"/><path d="M0 0 L86.6 -50 L86.6 50 L0 100Z" fill="#c27f8f"/><g fill="#fff"><path transform="matrix(.866 .5 0 1 -86.6 -50)" d="M41 0H59V84H41Z"/><path transform="matrix(.866 -.5 .866 .5 -86.6 -50)" d="M0 41H68V59H0Z"/><path transform="matrix(.866 -.5 .866 .5 -86.6 -50)" d="M92 50 62 27V73Z" stroke="#fff" stroke-width="4" stroke-linejoin="round"/></g></g></symbol>
+    <symbol id="wordLogo" viewBox="-8 -8 1010.23 116"><path d="M5 95 L46 5 L87 95 M17.3 68 H74.7 M119 95 V5 H156.5 A24.5 24.5 0 0 1 156.5 54 H119 M150.5 54 L181 95 M213 95 V5 H250.5 A24.5 24.5 0 0 1 250.5 54 H213 M244.5 54 L275 95 M307 50 a47 47 0 1 0 94 0 a47 47 0 1 0 -94 0 M433 5 L463.5 95 L494 5 L524.5 95 L555 5 M705.23 16.77 A47 47 0 1 0 705.23 83.23 M737.23 5 V60 A35 35 0 0 0 807.23 60 V5 M839.23 95 V5 H875.73 A21.5 21.5 0 0 1 875.73 48 H839.23 M875.73 48 H879.73 A23.5 23.5 0 0 1 879.73 95 H839.23 M989.23 5 H935.23 V95 H989.23 M935.23 50 H983.23" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </svg>
 
   <div class="hud">
@@ -357,8 +358,6 @@
     <button id="zoomOut" title="축소">－</button>
     <button id="resetView" title="시점 초기화">⟲</button>
     <button id="sound" title="효과음 끄기">🔊</button>
-    <button id="beltL" title="벨트를 왼쪽으로 한 칸" hidden>◁</button>
-    <button id="beltR" title="벨트를 오른쪽으로 한 칸" hidden>▷</button>
   </div>
 
   <div class="panel pill" id="panel" hidden>
@@ -420,8 +419,9 @@
   </div>
 
   <div class="home" id="home" hidden>
+    <svg class="sky-hills" viewBox="0 0 375 172" preserveAspectRatio="none" aria-hidden="true"><path d="M0 22 C 70 -12 130 14 190 28 S 320 -8 375 10 V172 H0Z" fill="#f3ddd8"/><path d="M0 74 C 90 44 160 82 240 70 S 340 46 375 62 V172 H0Z" fill="#ebd0d6"/><path d="M0 134 C 80 114 200 150 375 122 V172 H0Z" fill="#ddd0e8"/></svg>
     <header class="home-head">
-      <div class="home-brand"><svg class="home-cube" aria-hidden="true"><use href="#cubeLogo"/></svg><b class="wordmark">Arrow Cube</b></div>
+      <div class="home-brand"><svg class="home-cube" aria-hidden="true"><use href="#cubeLogo"/></svg><svg class="home-word" viewBox="-8 -8 1010.23 116" role="img" aria-label="Arrow Cube"><use href="#wordLogo"/></svg></div>
       <div class="pill home-stars" id="homeStars"></div>
       <button class="pill icon" id="homeSound" title="효과음 끄기">🔊</button>
     </header>
@@ -429,17 +429,11 @@
   </div>
 
   <div class="splash" id="splash">
+    <svg class="sky-bits" viewBox="0 0 375 140" aria-hidden="true"><rect x="30" y="30" width="74" height="14.8" rx="7.4" fill="#fff" opacity="0.75"/><rect x="46.28" y="22.6" width="33.3" height="14.8" rx="7.4" fill="#fff" opacity="0.75"/><rect x="272" y="104" width="52" height="10.4" rx="5.2" fill="#fff" opacity="0.6"/><rect x="283.44" y="98.8" width="23.4" height="10.4" rx="5.2" fill="#fff" opacity="0.6"/><path d="M286 20 Q 289 18 292 22 Q 295 18 298 20" fill="none" stroke="#a9969f" stroke-width="1.3" stroke-linecap="round"/><path d="M303.2 28.4 Q 305.6 26.8 308 30 Q 310.4 26.8 312.8 28.4" fill="none" stroke="#a9969f" stroke-width="1.3" stroke-linecap="round"/><path d="M275.8 32.6 Q 277.9 31.2 280 34 Q 282.1 31.2 284.2 32.6" fill="none" stroke="#a9969f" stroke-width="1.3" stroke-linecap="round"/></svg>
+    <svg class="sky-hills" viewBox="0 0 375 172" preserveAspectRatio="none" aria-hidden="true"><path d="M0 22 C 70 -12 130 14 190 28 S 320 -8 375 10 V172 H0Z" fill="#f3ddd8"/><path d="M0 74 C 90 44 160 82 240 70 S 340 46 375 62 V172 H0Z" fill="#ebd0d6"/><path d="M0 134 C 80 114 200 150 375 122 V172 H0Z" fill="#ddd0e8"/></svg>
     <div class="splash-logo">
-      <svg class="splash-cube" aria-hidden="true"><use href="#cubeLogo"/></svg>
-      <svg class="splash-name" viewBox="0 0 400 92" role="img" aria-label="Arrow Cube">
-        <defs>
-          <linearGradient id="nameFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#8794ff"/>
-            <stop offset="1" stop-color="#3f4bd6"/>
-          </linearGradient>
-        </defs>
-        <text class="wordmark" x="200" y="68" text-anchor="middle" textLength="372" lengthAdjust="spacingAndGlyphs" font-size="68" fill="url(#nameFill)" stroke="#fff" stroke-width="12" stroke-linejoin="round" paint-order="stroke">Arrow Cube</text>
-      </svg>
+      <svg class="splash-cube" viewBox="-125 -136 250 268" aria-hidden="true"><circle cy="-14" r="124" fill="url(#sunGlow)"/><use href="#cubeLogo" x="-96" y="-108" width="192" height="232"/></svg>
+      <svg class="splash-name" viewBox="-8 -8 1010.23 116" role="img" aria-label="Arrow Cube"><use href="#wordLogo"/></svg>
       <p class="splash-sub">3D 화살표 퍼즐</p>
     </div>
     <div class="splash-foot">

@@ -1,46 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- App icon: the cube with arrows on its faces, on the home world's indigo. Full
-       bleed (iOS and Android round the corners themselves); the cube stays inside the
-       middle 80% so masks never cut it. The PNGs next to it are this, drawn onto a
-       canvas in a browser at 512, 192 and 180 px. -->
+  <!-- App icon (2026-11-02): the logo's cube, a white arrow folding over its top edge,
+       at dawn with a pale sun behind it. Full bleed (iOS and Android round the corners
+       themselves); the cube stays inside the middle 80% so masks never cut it. The sky
+       runs past the edges because Android's adaptive icon draws #back and #front as two
+       layers half as big again as what shows. The PNGs next to it and Android's mipmaps
+       are this, drawn onto a canvas in a browser. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#7684ff"/>
-      <stop offset="1" stop-color="#4654e0"/>
+    <linearGradient id="sky" x1="0" y1="0" x2="154" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffcdbe"/>
+      <stop offset=".55" stop-color="#fbe5dc"/>
+      <stop offset="1" stop-color="#ddd9f0"/>
     </linearGradient>
+    <radialGradient id="sun" cx="256" cy="226" r="196" gradientUnits="userSpaceOnUse">
+      <stop offset=".6" stop-color="#fff7f0"/>
+      <stop offset="1" stop-color="#fff7f0" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-50%" y="-200%" width="200%" height="500%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
-  <g stroke-linejoin="round">
-    <!-- faces: top, left, right -->
-    <path d="M256 92 L408 180 L256 268 L104 180 Z" fill="#ffffff"/>
-    <path d="M104 180 L256 268 L256 444 L104 356 Z" fill="#e9edff"/>
-    <path d="M256 268 L408 180 L408 356 L256 444 Z" fill="#d3dafc"/>
+  <g id="back">
+    <rect x="-128" y="-128" width="768" height="768" fill="url(#sky)"/>
+    <circle cx="256" cy="226" r="196" fill="url(#sun)"/>
   </g>
-  <g fill="none" stroke="#1f2a4d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
-    <!-- left face: 0..100 square mapped onto it -->
-    <g transform="matrix(1.52 0.88 0 1.76 104 180)">
-      <path d="M26 84 V30"/>
-      <path d="M70 80 V56 H50"/>
-    </g>
-    <!-- right face -->
-    <g transform="matrix(1.52 -0.88 0 1.76 256 268)">
-      <path d="M24 22 V66 H62"/>
-    </g>
-    <!-- top face -->
-    <g transform="matrix(1.52 -0.88 1.52 0.88 104 180)">
-      <path d="M26 70 H58 V36"/>
-    </g>
-  </g>
-  <g fill="#1f2a4d">
-    <g transform="matrix(1.52 0.88 0 1.76 104 180)">
-      <path d="M26 14 L15 32 H37 Z"/>
-      <path d="M36 56 L52 46 V66 Z"/>
-    </g>
-    <g transform="matrix(1.52 -0.88 0 1.76 256 268)">
-      <path d="M80 66 L62 55 V77 Z"/>
-    </g>
-    <g transform="matrix(1.52 -0.88 1.52 0.88 104 180)">
-      <path d="M58 18 L47 36 H69 Z"/>
-    </g>
+  <g id="front">
+    <ellipse cx="256" cy="426" rx="112" ry="14" fill="#7a4a62" opacity=".35" filter="url(#soft)"/>
+    <g transform="translate(256 248) scale(1.56)"><defs><clipPath id="iconClip"><path d="M-5 -97.11 A10 10 0 0 1 5 -97.11 L81.6 -52.89 A10 10 0 0 1 86.6 -44.23 L86.6 44.23 A10 10 0 0 1 81.6 52.89 L5 97.11 A10 10 0 0 1 -5 97.11 L-81.6 52.89 A10 10 0 0 1 -86.6 44.23 L-86.6 -44.23 A10 10 0 0 1 -81.6 -52.89 Z"/></clipPath></defs><g clip-path="url(#iconClip)"><path d="M0 -100 L86.6 -50 L0 0 L-86.6 -50Z" fill="#f6cdbd"/><path d="M-86.6 -50 L0 0 L0 100 L-86.6 50Z" fill="#e9a196"/><path d="M0 0 L86.6 -50 L86.6 50 L0 100Z" fill="#c27f8f"/><g fill="#fff"><path transform="matrix(.866 .5 0 1 -86.6 -50)" d="M41 0H59V84H41Z"/><path transform="matrix(.866 -.5 .866 .5 -86.6 -50)" d="M0 41H68V59H0Z"/><path transform="matrix(.866 -.5 .866 .5 -86.6 -50)" d="M92 50 62 27V73Z" stroke="#fff" stroke-width="4" stroke-linejoin="round"/></g></g></g>
   </g>
 </svg>

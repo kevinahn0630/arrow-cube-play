@@ -36,7 +36,8 @@ const key = (p) => p.join(',');
 //   discus — 🇬🇷 a discus arrow's way out runs over one cube edge onto the next face
 //   aurora — 🇨🇦 a curtain lets only its own colour through, and lifts once every
 //            arrow of that colour is gone
-//   belt   — 🇩🇪 a belt round the cube carries short arrows; the player moves it
+//   wall   — 🇩🇪 Berlin walls: a wall stands in the way until as many arrows as its
+//            number have left from its face
 //   tunnel — 🇹🇷 a path entering one tunnel mouth comes out of the other
 //   sundial — 🇪🇬 obelisks cast shadows no path can cross; the player turns the sun
 //   lasso  — 🇺🇸 a lasso arrow pulls the first arrow in its way out along with it
@@ -51,16 +52,17 @@ const key = (p) => p.join(',');
 //   lantern — 🇹🇭 a lantern casts a winding shadow round its head until it leaves:
 //            only lanterns show in the dark (their ways out are beams of light), and
 //            an arrow wholly in the dark cannot be tapped
-//   eagle  — 🇷🇺 a double-headed eagle leaves by either end, whichever is open
-//   shoji  — 🇯🇵 sliding doors: two panels on a track of three cells, so one cell is
-//            open; the player taps a track cell to open it
-//   windmill — 🇳🇱 two long sails across a hub, lying along one axis or the other;
-//            the player taps the hub to swing them round
+//   ice    — 🇷🇺 Siberian ice: a frozen arrow can only leave once no other arrow
+//            touches it
+//   samurai — 🇯🇵 a samurai cuts through the first arrow in its way out (not its
+//            head): that arrow's cells from the cut to its tail fall away
+//   mondrian — 🇳🇱 Mondrian panels: a way out may run into a panel only while no
+//            other arrow sits in it
 //   encierro — 🇪🇸 a bull tapped while something stands in its way charges up to it
 //            instead of bumping, and its tail clears the cells it leaves
 export const GIMMICKS = [
-  'gate', 'pair', 'mirror', 'bell', 'discus', 'aurora', 'belt', 'tunnel', 'sundial', 'lasso', 'dial',
-  'boomerang', 'canal', 'diagonal', 'vine', 'lantern', 'eagle', 'shoji', 'windmill', 'encierro',
+  'gate', 'pair', 'mirror', 'bell', 'discus', 'aurora', 'wall', 'tunnel', 'sundial', 'lasso', 'dial',
+  'boomerang', 'canal', 'diagonal', 'vine', 'lantern', 'ice', 'samurai', 'mondrian', 'encierro',
 ];
 
 // Keys and pairs are told apart by colour, so a puzzle holds at most this many
@@ -193,8 +195,6 @@ export function makeCube(N) {
 //   aurora — a path may cross another colour's curtain only while no arrow of that
 //            colour has been placed yet: all of them are placed later, so they are
 //            gone (and the curtain lifted) by the time this arrow leaves
-//   belt   — arrows are placed with the belt at rest; the puzzle starts with the belt
-//            moved off that position, and the player can always move it back
 //   tunnel — only the path's shape changes
 //   sundial — shadows do not depend on the arrows, so a path just has to keep clear
 //            of them under at least one position of the sun
@@ -203,8 +203,15 @@ export function makeCube(N) {
 //            path crosses exactly one of the two. Only the lasso can break the knot;
 //            pulling is never a waste (a lasso fires only when one arrow is left in
 //            its way, the one it could ever pull), so the greedy solver stays valid
-//   dial   — like the belt: arrows are placed with the dials at rest, and the puzzle
-//            starts with them turned
+//   samurai — knots too: an arrow, then one whose way out crosses its body (not its
+//            head, which no blade cuts) and whose own body lies across the first
+//            one's way out (the two block each other for good), then a samurai whose
+//            way out first meets the first arrow at or nearer its head than every
+//            cell the other crosses, so the cut takes those away (and nothing else
+//            may stand on the samurai's way). A cut only ever takes cells away, so the
+//            greedy solver stays valid
+//   dial   — arrows are placed with the dials at rest, and the puzzle starts with
+//            them turned
 //   boomerang, diagonal — only the path's shape changes
 //   canal  — canals are fixed before arrows, like mirrors
 //   vine   — like a gate: the strand is placed as extra cells of its machete, so it
@@ -212,15 +219,22 @@ export function makeCube(N) {
 //   lantern — a lantern is kept only if the puzzle stays solvable with its dark, so
 //            no arrow hidden in the dark is ever needed out of the way before some
 //            lantern can light it (the dark only ever lifts, so the solver decides it)
-//   eagle  — at least one of its two ways out is clear of earlier arrows
+//   ice    — a frozen arrow is placed only where no earlier arrow touches it (those
+//            are still there when it leaves); the cells round it count as part of
+//            its way out (`extra`), so later arrows sit there and it waits on them
 //   encierro — stampedes: a bull whose way out no other path crosses (so where it
 //            charges to never blocks anyone: charging is never a waste), an arrow
 //            standing on that way, and then an arrow whose way out crosses only the
 //            bull's tail, the part a charge clears. That last arrow cannot leave until
 //            the bull has charged. Nothing else may sit on the stretch it charges over.
-//   shoji, windmill — like the sundial: the doors and sails do not depend on the
-//            arrows, so a path just has to be open under some setting (it may not
-//            cross two cells of one door, or both sails of one windmill)
+//   wall   — walls are fixed before arrows and paths may cross them; each wall's
+//            number is set at the end from how many arrows can leave its face while
+//            it stands (countWalls), so it always falls, and with every wall down
+//            the puzzle is a plain one
+//   mondrian — a way out may not run into a panel an earlier arrow sits in (that
+//            arrow is still there when this one leaves). The cells of the panels a
+//            way out runs into count as part of it (`extra`), so blocking, chains and
+//            gap fillers' loop check all see what a panel holds up
 //
 // `block` (0..1) makes puzzles harder: each placement tries several candidates and
 // keeps the one lying across the most exit paths of earlier arrows, so fewer arrows
@@ -246,7 +260,7 @@ export function generate(
   const rnd = rng32(seed);
   const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
   const occ = new Int32Array(cube.count).fill(-1);
-  const fixed = new Uint8Array(cube.count); // mirror, guard, curtain and belt cells: no body may sit there
+  const fixed = new Uint8Array(cube.count); // tile cells (mirrors, guards, curtains, walls, …): no body may sit there
   const rayOwners = Array.from({ length: cube.count }, () => []);
   // How the arrows so far wait on one another: the earlier arrows each one stands in
   // the way of, how many later arrows stand in its own way, and the longest chain of
@@ -293,22 +307,23 @@ export function generate(
   }
 
   // How much of each gimmick: counts grow with `amount`, and those not capped by the
-  // solver (which tries every setting of doors, sails and dials) or by the colours also
-  // grow with the cube, so the gimmick's share of a puzzle rises from stage to stage.
-  const belt = gimmick === 'belt' ? makeBelt() : null;
-  // Tunnels and canals take one face each, two on bigger cubes.
+  // solver or by the colours also grow with the cube, so the gimmick's share of a
+  // puzzle rises from stage to stage.
+  // Tunnels and canals take one face each, two on bigger cubes. Tunnels come two more
+  // than canals at every amount (user request 2026-11-02: lean on them more).
   const perFace = cube.N >= 9 ? 2 : 1;
-  if (gimmick === 'tunnel') addTunnels(Math.min(6 * perFace, 1 + Math.round(amount * 9)));
-  let beltArrows = 0;
+  if (gimmick === 'tunnel') addTunnels(Math.min(6 * perFace, 2 + Math.round(amount * 10)));
   const sundial = gimmick === 'sundial' ? makeSundial() : null;
   const canals = new Map(); // cell → flow direction
   if (gimmick === 'canal') makeCanals(Math.min(6 * perFace, 1 + Math.round(amount * 9)));
-  const doors = gimmick === 'shoji' ? makeDoors(1 + Math.round(amount * 6)) : null;
-  const doorOf = new Map(); // track cell → [door, place on its track]
-  doors?.forEach((d, k) => d.track.forEach((c, j) => doorOf.set(c, [k, Math.floor(j / d.width)])));
-  const mills = gimmick === 'windmill' ? makeMills(1 + Math.round(amount * 5)) : null;
-  const sailOf = new Map(); // sail cell → [windmill, which way its sails lie then]
-  mills?.forEach((m, k) => m.sails.forEach((cs, w) => cs.forEach((c) => sailOf.set(c, [k, w]))));
+  // Berlin walls, as many as canals.
+  const walls = gimmick === 'wall' ? makeWalls(Math.min(6 * perFace, 1 + Math.round(amount * 9))) : null;
+  const wallOf = new Map(); // wall cell → its wall
+  walls?.forEach((w, k) => w.cells.forEach((c) => wallOf.set(c, k)));
+  // Mondrian panels, covering from about a twelfth of the cube to a third of it.
+  const panels = gimmick === 'mondrian' ? makePanels(cube.count * (0.08 + 0.27 * amount)) : null;
+  const panelOf = new Map(); // panel cell → its panel
+  panels?.forEach((p, k) => p.cells.forEach((c) => panelOf.set(c, k)));
   const dials = gimmick === 'dial' ? makeDials(1 + Math.round(amount * 4)) : null;
   let dialArrows = 0;
   let knots = 0;
@@ -316,15 +331,21 @@ export function generate(
   let stampedes = 0;
   const stampedeGoal = gimmick === 'encierro' ? Math.max(1, Math.round(cube.count * 0.024 * amount)) : 0;
   const reserved = new Set(); // bulls' ways out: no other path may cross them
-  const vineGoal = gimmick === 'vine' ? 1 + Math.round(cube.count * 0.02 * amount) : 0;
-  const knotGoal = gimmick === 'lasso' ? Math.max(1, Math.round(cube.count * 0.02 * amount)) : 0;
+  // Vines: half as many again as at first, and longer (addVine), since the world played
+  // too easy (2026-11-02).
+  const vineGoal = gimmick === 'vine' ? 1 + Math.round(cube.count * 0.035 * amount) : 0;
+  const knotGoal = gimmick === 'lasso' || gimmick === 'samurai' ? Math.max(1, Math.round(cube.count * 0.02 * amount)) : 0;
+  // Frozen arrows, spread through the build too (fewer fit later on, as few places
+  // with nothing round them are left).
+  const iceGoal = gimmick === 'ice' ? Math.max(1, Math.round(cube.count * 0.015 * amount)) : 0;
+  let ices = 0;
   // Pairs and keys (one colour each), spread through the build like knots.
   const linkGoal = gimmick === 'pair' || gimmick === 'gate' ? Math.min(MAX_LINKS, Math.max(1, Math.round(cube.count * 0.012 * amount))) : 0;
 
   // Crossing gimmick cells counts towards picking a candidate, more on later stages.
-  // The belt and the dials lie across so many ways out by themselves on a small cube
-  // that early stages steer round them.
-  const usesWeight = gimmick === 'belt' || gimmick === 'dial' ? 14 * amount - 4 : 2 + 8 * amount;
+  // The dials lie across so many ways out by themselves on a small cube that early
+  // stages steer round them.
+  const usesWeight = gimmick === 'dial' ? 14 * amount - 4 : 2 + 8 * amount;
   // How hard the build works at making arrows wait on other faces, so that a face lets
   // only two or three arrows out before others elsewhere have to go: arrows that leave
   // straight off an edge are dropped, some candidates bridge over from another face,
@@ -343,8 +364,9 @@ export function generate(
   // Near the end there is then nearly always one to take while the others wait for
   // their turn, and a player who takes the gimmick arrows while their way is open
   // and keeps the plain ones for later almost never runs into a dead end. Dials get
-  // stuck rarely enough without.
-  const calmUntil = gimmick === 'sundial' || gimmick === 'bell' ? goal * 0.2 : 0;
+  // stuck rarely enough without. Big Ben keeps fewer calm arrows (an eighth) so that
+  // more of its arrows wait on the guards (2026-11-02).
+  const calmUntil = gimmick === 'sundial' ? goal * 0.2 : gimmick === 'bell' ? goal * 0.12 : 0;
   // Who stands on cell c when the arrow placed now leaves: with clocked dials, dial
   // arrows turned with their dials to that step.
   let dialView = null;
@@ -365,17 +387,18 @@ export function generate(
   // aimed through. (Without them a bridge, which seldom crosses a curtain, would take
   // the aurora's place on later stages.)
   const aims = [
-    ...(doors ?? []).flatMap((d) => d.track),
-    ...(mills ?? []).flatMap((m) => m.sails.flat()),
     ...(dials ?? []).flatMap((d) => d.ring),
     ...canals.keys(),
     ...tunnels.keys(),
-    ...(belt?.cells ?? []),
     ...curtains.keys(),
+    ...wallOf.keys(),
+    ...panelOf.keys(),
   ];
 
+  // Mirrors, and Big Ben's guards (more of them than mirrors, so more ways out run
+  // through one).
   if (gimmick === 'mirror' || gimmick === 'bell') {
-    const want = Math.round(cube.count * 0.12 * amount);
+    const want = Math.round(cube.count * (gimmick === 'bell' ? 0.2 : 0.12) * amount);
     for (let k = 0; k < want * 20 && tiles < want; k++) {
       const c = Math.floor(rnd() * cube.count);
       if (fixed[c] || !roomOnFace(c)) continue;
@@ -388,18 +411,26 @@ export function generate(
         guards.set(c, rnd() < 0.5 ? 0 : 1);
       }
     }
+    // Arrows are aimed through guards like through the switch and path gimmicks.
+    if (gimmick === 'bell') aims.push(...guards.keys());
   }
 
-  // Whether something stands on arrow o's way out now, and something whose head is on
+  // The cells that must be empty for arrow o to leave: its way out and `extra`, the
+  // rest of any panel it runs into or the cells round a frozen arrow.
+  const needs = (o) => (arrows[o].extra.length ? [...arrows[o].ray, ...arrows[o].extra] : arrows[o].ray);
+  // Whether something stands in arrow o's way now, and something whose head is on
   // another face.
   const faceOfHead = (o) => headFaces[o];
-  const heldNow = (o) => arrows[o].ray.some((c) => occ[c] >= 0 && occ[c] !== o);
-  const heldAcrossNow = (o) => arrows[o].ray.some((c) => occ[c] >= 0 && occ[c] !== o && faceOfHead(occ[c]) !== faceOfHead(o));
+  const heldNow = (o) => needs(o).some((c) => occ[c] >= 0 && occ[c] !== o);
+  const heldAcrossNow = (o) => needs(o).some((c) => occ[c] >= 0 && occ[c] !== o && faceOfHead(occ[c]) !== faceOfHead(o));
+  // The cells where a way out from `from` runs into a panel from outside it.
+  const intoPanels = (from, ray) => ray.filter((c, k) => panelOf.has(c) && panelOf.get(c) !== panelOf.get(k ? ray[k - 1] : from));
 
   while (filled < goal && budget > 0) {
-    // On later stages more arrows are aimed through a door, sail, dial, canal, tunnel
-    // mouth or the belt, so that more ways out run into the gimmick.
-    const aim = aims.length > 0 && rnd() < 0.7 * amount;
+    // On later stages more arrows are aimed through a dial, canal, tunnel mouth,
+    // guard, wall or panel, so that more ways out run into the gimmick; through
+    // tunnels many from the first stage on.
+    const aim = aims.length > 0 && rnd() < (gimmick === 'tunnel' ? 0.35 + 0.6 * amount : 0.7 * amount);
     // With `turn`, some candidates are bridges: their body lies across the way out of an
     // arrow nothing on another face holds yet, from a head on another face.
     const loose = [];
@@ -408,13 +439,12 @@ export function generate(
     const best = bestOf(() => grow(null, aim ? { aim } : bridge()));
     if (!best) continue;
     const a = place(best);
-    // Keep the belt filling at the same pace as the cube, up to most of its slots, so
-    // paths crossing it only open where the belt leaves a gap.
-    while (belt && beltArrows < belt.cells.length * (0.05 + 0.7 * amount) * (filled / goal) && addBeltArrow());
-    // Dial arrows likewise, up to most of each dial's ring.
+    // Keep the dials filling at the same pace as the cube, up to most of each dial's
+    // ring.
     while (dials && dialArrows < dials.length * (2 + 5 * amount) * (filled / goal) && addDialArrow());
     // Knots likewise, spread through the build.
     if (knots < knotGoal * (filled / goal)) addKnot(a);
+    if (ices < iceGoal * (filled / goal)) addIce();
     if (vines < vineGoal * (filled / goal)) addVine(a);
     if (stampedes < stampedeGoal * (filled / goal)) addStampede();
 
@@ -433,16 +463,6 @@ export function generate(
     }
   }
   fillGaps();
-  if (belt) {
-    // Belt arrows live in the belt's slots, not in occ, and the belt starts moved.
-    belt.slots = new Int32Array(belt.cells.length).fill(-1);
-    arrows.forEach((ar, i) => {
-      if (ar.slot < 0) return;
-      belt.slots[ar.slot] = i;
-      occ[belt.cells[ar.slot]] = -1;
-    });
-    belt.start = 1 + Math.floor(rnd() * (belt.cells.length - 1));
-  }
   // A clocked switch starts where the last arrow placed (the first to leave) needs it.
   const startStep = period ? (((1 - arrows.length) % period) + period) % period : 0;
   if (sundial) sundial.start = startStep;
@@ -473,71 +493,20 @@ export function generate(
     });
     for (const d of dials) d.start = startStep;
   }
-  if (doors) for (const d of doors) d.start = Math.floor(rnd() * 3);
-  if (mills) for (const m of mills) m.start = rnd() < 0.5 ? 0 : 1;
   const puz = {
-    cube, arrows, occ, mirrors, guards, curtains, tints, belt, tunnels, canals, sundial, dials, dialOf, dialOcc,
+    cube, arrows, occ, mirrors, guards, curtains, tints, tunnels, canals, sundial, dials, dialOf, dialOcc,
     bellStart: guards.size ? startStep : 0,
-    doors, doorOf, mills, sailOf, darkOf: null, beams: null, gimmick,
+    walls, wallOf, panels, panelOf, darkOf: null, beams: null, gimmick,
   };
+  if (walls) countWalls(puz);
   if (gimmick === 'lantern') {
     // More lanterns as stages get harder (one at amount 0.1, six at 1), whose shadows
-    // together cover from about a seventh of the cube to nearly half of it.
+    // together cover from about a tenth of the cube to over a third of it (80% of what
+    // they first did, which played too hard: 2026-11-02).
     const n = Math.max(1, Math.min(6, 1 + Math.round(amount * 5)));
-    addLanterns(puz, n, Math.round((cube.count * (0.12 + 0.33 * amount)) / n));
+    addLanterns(puz, n, Math.round((cube.count * (0.12 + 0.33 * amount) * 0.8) / n));
   }
   return puz;
-
-  // Shoji: a straight track of three places, at most two on a face; on bigger cubes
-  // each place is several cells wide (`width`), so more ways out can run through a door.
-  function makeDoors(n) {
-    const out = [];
-    const used = new Map(); // face → doors on it
-    const width = cube.N >= 8 ? 2 : 1;
-    for (let k = 0; k < n * 40 && out.length < n; k++) {
-      const first = Math.floor(rnd() * cube.count);
-      const face = cube.faceOf(first);
-      if ((used.get(face) ?? 0) >= 2) continue;
-      const t = pick(cube.tangents(first));
-      const track = [first];
-      while (track.length < 3 * width) {
-        const r = cube.step(track.at(-1), t);
-        if (r.wrapped) break;
-        track.push(r.id);
-      }
-      if (track.length < 3 * width || track.some((c) => fixed[c])) continue;
-      for (const c of track) fixed[c] = 1;
-      used.set(face, (used.get(face) ?? 0) + 1);
-      out.push({ track, width, start: 0 });
-    }
-    return out;
-  }
-
-  // Windmills: a hub with two sails, each two cells long (more on bigger cubes), lying
-  // along one axis of the face (sails[0]) or the other (sails[1]). On faces of their
-  // own; nothing may sit on the hub or any sail cell.
-  function makeMills(n) {
-    const out = [];
-    const used = new Set();
-    const reach = 2 + Math.floor(Math.max(0, cube.N - 6) / 3);
-    const offsets = [];
-    for (let j = -reach; j <= reach; j++) if (j) offsets.push(j);
-    for (let k = 0; k < n * 40 && out.length < n; k++) {
-      const hub = Math.floor(rnd() * cube.count);
-      const face = cube.faceOf(hub);
-      if (used.has(face)) continue;
-      const [u, , v] = cube.tangents(hub);
-      const P = cube.cells[hub].p;
-      const at = (t, j) => cube.index.get(add(P, scale(t, 2 * j)).join(','));
-      const sails = [u, v].map((t) => offsets.map((j) => at(t, j)));
-      const all = [hub, ...sails.flat()];
-      if (all.some((c) => c === undefined || cube.faceOf(c) !== face || fixed[c])) continue;
-      for (const c of all) fixed[c] = 1;
-      used.add(face);
-      out.push({ hub, sails, start: 0 });
-    }
-    return out;
-  }
 
   // Canals: runs of three cells or more (longer on bigger cubes), `perFace` to a face,
   // turning now and then. Each cell sends a path on to the next; the last one sends it
@@ -570,6 +539,86 @@ export function generate(
       used.set(face, (used.get(face) ?? 0) + 1);
       made++;
     }
+  }
+
+  // Berlin walls: straight runs of three cells or more (longer on bigger cubes),
+  // `perFace` to a face. No body may sit on one; ways out cross them while the cube is
+  // built (countWalls sets when each one falls).
+  function makeWalls(n) {
+    const out = [];
+    const used = new Map(); // face → walls on it
+    for (let k = 0; k < n * 40 && out.length < n; k++) {
+      const first = Math.floor(rnd() * cube.count);
+      const face = cube.faceOf(first);
+      if ((used.get(face) ?? 0) >= perFace) continue;
+      const t = pick(cube.tangents(first));
+      const want = 3 + Math.floor(rnd() * (1 + cube.N / 4));
+      const cells = [first];
+      while (cells.length < want) {
+        const r = cube.step(cells.at(-1), t);
+        if (r.wrapped) break;
+        cells.push(r.id);
+      }
+      if (cells.length < want || cells.some((c) => fixed[c])) continue;
+      for (const c of cells) fixed[c] = 1;
+      used.set(face, (used.get(face) ?? 0) + 1);
+      out.push({ cells, face, count: 0 });
+    }
+    return out;
+  }
+
+  // Each wall falls once its face has let out `count` arrows. The walls fall in a
+  // random order, each at as many as can leave its face with the walls before it down
+  // and itself and those after it standing (the solver says how many), so the
+  // numbers on one face differ and every wall is sure to fall; with them all down the
+  // rest is a plain puzzle. Walls no way out crosses, or with nothing able to leave
+  // their face first, are left out.
+  function countWalls(puz) {
+    const crossed = new Set(arrows.flatMap((a) => a.ray.filter((c) => wallOf.has(c)).map((c) => wallOf.get(c))));
+    const order = walls.filter((_, k) => crossed.has(k));
+    for (let k = order.length - 1; k > 0; k--) {
+      const j = Math.floor(rnd() * (k + 1));
+      [order[k], order[j]] = [order[j], order[k]];
+    }
+    for (const w of walls) w.count = Infinity;
+    const kept = [];
+    for (const w of order) {
+      const left = new Int32Array(6);
+      for (const l of solve(puz).layers) for (const i of l.arrows) left[cube.faceOf(arrows[i].cells.at(-1))]++;
+      if (!left[w.face]) continue;
+      w.count = left[w.face];
+      kept.push(w);
+    }
+    walls.splice(0, walls.length, ...kept);
+    wallOf.clear();
+    walls.forEach((w, k) => w.cells.forEach((c) => wallOf.set(c, k)));
+  }
+
+  // Mondrian panels: rectangles two cells or more on a side (up to five on the biggest
+  // cubes), apart from one another (they may touch, in different colours), until they
+  // cover about `area` cells. Arrows sit in them like anywhere else.
+  function makePanels(area) {
+    const out = [];
+    const taken = new Set();
+    const most = 2 + Math.floor(cube.N / 4);
+    let covered = 0;
+    for (let k = 0; k < 400 && covered < area; k++) {
+      const corner = Math.floor(rnd() * cube.count);
+      const [u, , v] = cube.tangents(corner);
+      const w = 2 + Math.floor(rnd() * (most - 1));
+      const h = 2 + Math.floor(rnd() * (most - 1));
+      const P = cube.cells[corner].p;
+      const cells = [];
+      for (let a = 0; a < w; a++) for (let b = 0; b < h; b++) cells.push(cube.index.get(add(P, add(scale(u, 2 * a), scale(v, 2 * b))).join(',')));
+      if (cells.some((c) => c === undefined || taken.has(c))) continue;
+      for (const c of cells) taken.add(c);
+      const near = new Set(cells.flatMap((c) => cube.tangents(c).map((t) => cube.step(c, t).id)));
+      const touching = new Set(out.filter((p) => p.cells.some((c) => near.has(c))).map((p) => p.hue));
+      const hue = [0, 1, 2].map((j) => (out.length + j) % 3).find((h) => !touching.has(h)) ?? out.length % 3;
+      out.push({ cells, hue });
+      covered += cells.length;
+    }
+    return out;
   }
 
   // Sundial: obelisks (tiles) and, for each of the four sun positions, the cells in
@@ -679,38 +728,6 @@ export function generate(
     }
   }
 
-  // The belt: one ring of cells round the four side faces at middle height. Each slot
-  // knows both ways out (up and down its face), which never cross the belt again.
-  function makeBelt() {
-    const N = cube.N;
-    const y = 2 * Math.floor(N / 2) + 1;
-    const cells = [];
-    let cur = cube.index.get([1, y, 2 * N].join(','));
-    let dir = [1, 0, 0];
-    for (let k = 0; k < 4 * N; k++) {
-      cells.push(cur);
-      fixed[cur] = 1;
-      const r = cube.step(cur, dir);
-      cur = r.id;
-      dir = r.dir;
-    }
-    const rays = cells.map((c) => [[0, 1, 0], [0, -1, 0]].map((d) => ({ dir: d, ...cube.trace(c, d) })));
-    return { cells, index: new Map(cells.map((c, p) => [c, p])), rays, slots: null, start: 0 };
-  }
-
-  // One short arrow on a free belt slot, pointing up or down, if one fits.
-  function addBeltArrow() {
-    for (let t = 0; t < 24; t++) {
-      const p = Math.floor(rnd() * belt.cells.length);
-      const up = rnd() < 0.5 ? 0 : 1;
-      const way = belt.rays[p][up];
-      if (occ[belt.cells[p]] >= 0 || way.ray.some((c) => occ[c] >= 0)) continue;
-      place({ body: [belt.cells[p]], ...way, slot: p, up });
-      beltArrows++;
-      return true;
-    }
-    return false;
-  }
 
   function bestOf(make, n = tries) {
     let best = null;
@@ -763,8 +780,8 @@ export function generate(
   }
 
   function place({
-    body, dir, ray, exitDir, jumps = [], disc = false, tint = -1, slot = -1, up = 0, lasso = false, dial = -1,
-    boom = null, diag = false, ray2 = null, dir2 = null, exitDir2 = null, run = false,
+    body, dir, ray, exitDir, jumps = [], disc = false, tint = -1, lasso = false, samurai = false, dial = -1,
+    boom = null, diag = false, run = false, ice = false, extra = [],
   }) {
     const i = arrows.length;
     const below = [...new Set(body.flatMap((c) => rayOwners[c]))];
@@ -775,11 +792,11 @@ export function generate(
     headFaces.push(cube.faceOf(body.at(-1)));
     for (const c of body) occ[c] = i;
     for (const c of ray) rayOwners[c].push(i);
-    for (const c of ray2 ?? []) rayOwners[c].push(i);
+    for (const c of extra) rayOwners[c].push(i);
     if (tint >= 0) tints[tint]++;
     arrows.push({
-      cells: body, dir, ray, exitDir, jumps, gates: [], partner: -1, hue: -1, disc, tint, slot, up, lasso, dial, knot: -1, boom, diag,
-      machete: false, lantern: false, ray2, dir2, exitDir2, jumps2: [], run,
+      cells: body, dir, ray, exitDir, jumps, gates: [], partner: -1, hue: -1, disc, tint, lasso, samurai, dial, knot: -1, boom, diag,
+      machete: false, lantern: false, run, ice, extra,
     });
     filled += body.length;
     return i;
@@ -810,7 +827,7 @@ export function generate(
     if (arrows[k].gates.length) arrows[k].hue = hues++;
   }
 
-  // A vine cut by machete arrow a: a strand of 3–6 empty cells on one face, starting
+  // A vine cut by machete arrow a: a strand of 4–8 empty cells on one face, starting
   // on a's way out, picked (of a few tries) to lie across the most earlier exit paths.
   // Its cells count as a's, like a gate.
   function addVine(a) {
@@ -821,7 +838,7 @@ export function generate(
     for (let t = 0; t < 12; t++) {
       let cur = pick(own);
       const strand = [cur];
-      const want = 3 + Math.floor(rnd() * 4);
+      const want = 4 + Math.floor(rnd() * 5);
       let dir = pick(cube.tangents(cur));
       for (let k = 0; k < 20 && strand.length < want; k++) {
         if (rnd() < 0.3) dir = pick(cube.tangents(cur));
@@ -927,12 +944,12 @@ export function generate(
   // arrows whose way out may run into arrows already there. With `deep` the filler is
   // more often one that does (it waits on others rather than starting free). A filler is kept only if it leaves no
   // loop of arrows each waiting on the next: nothing it runs into may wait, however
-  // indirectly, on an arrow it stands in the way of. Where pairs, lassos, eagles,
+  // indirectly, on an arrow it stands in the way of. Where pairs, lassos, samurais,
   // bulls or curtains change who waits on whom, the solver checks each filler instead.
-  // Belt and dial arrows count where they rest: the player can always put them back.
+  // Dial arrows count where they rest.
   function fillGaps() {
-    const bySolver = ['pair', 'lasso', 'eagle', 'encierro', 'aurora'].includes(gimmick);
-    const waits = arrows.map((a, i) => new Set(a.ray.map((c) => occ[c]).filter((o) => o >= 0 && o !== i)));
+    const bySolver = ['pair', 'lasso', 'samurai', 'encierro', 'aurora'].includes(gimmick);
+    const waits = arrows.map((a, i) => new Set(needs(i).map((c) => occ[c]).filter((o) => o >= 0 && o !== i)));
     const loops = (ahead, behind) => {
       const seen = new Set();
       const stack = [...ahead];
@@ -946,8 +963,9 @@ export function generate(
       return false;
     };
     const snapshot = () => ({
-      cube, arrows, occ, mirrors, guards, curtains, tints, belt: null, tunnels, canals, sundial, dials: null,
-      dialOf: null, dialOcc: null, doors, doorOf, mills, sailOf, darkOf: null, beams: null, gimmick,
+      cube, arrows, occ, mirrors, guards, curtains, tints, tunnels, canals, sundial, dials: null,
+      dialOf: null, dialOcc: null, walls: null, wallOf: null, panels, panelOf,
+      darkOf: null, beams: null, gimmick,
     });
     // Fillers at least `shortest` cells long, until `tries` attempts in a row fail.
     // With `turn`, a filler held by an arrow whose head is on another face, or holding one
@@ -978,7 +996,7 @@ export function generate(
           if (!long && !turn ? held || (free && !wantHeld) : seen >= enough && (held || !wantHeld)) break;
           const cand = grow(null, { fill: empty, shortest });
           if (!cand) continue;
-          const ahead = period ? new Set() : new Set(cand.ray.map((c) => occ[c]).filter((o) => o >= 0));
+          const ahead = period ? new Set() : new Set([...cand.ray, ...cand.extra].map((c) => occ[c]).filter((o) => o >= 0));
           const behind = new Set(cand.body.flatMap((c) => rayOwners[c]));
           if (loops(ahead, behind)) continue;
           seen++;
@@ -1022,7 +1040,7 @@ export function generate(
       height.pop();
       headFaces.pop();
       for (const c of a.cells) occ[c] = -1;
-      for (const c of [...a.ray, ...(a.ray2 ?? [])]) rayOwners[c].pop();
+      for (const c of [...a.ray, ...a.extra]) rayOwners[c].pop();
       if (a.run) for (const c of a.ray) reserved.delete(c);
       filled -= a.cells.length;
     }
@@ -1096,25 +1114,43 @@ export function generate(
   }
 
   // A knot round arrow a: a bull on a's way out whose own way out crosses a, then a
-  // lasso to pull one of the two. Undone if no lasso fits.
+  // lasso to pull one of the two. With samurais, an arrow whose way out crosses a's
+  // body and whose body lies across a's way out, then a samurai to cut away every
+  // cell of a that arrow's way out crosses (`from`: the one of them nearest a's head,
+  // counted from its tail). Undone if no lasso or samurai fits.
   function addKnot(a) {
-    const bull = bestOf(() => grow(null, { bull: a }), 20);
+    const blades = gimmick === 'samurai';
+    const bull = bestOf(() => grow(null, blades ? { tie: a } : { bull: a }), blades ? 60 : 20);
     if (!bull) return;
     const y = place(bull);
-    const rope = bestOf(() => grow(null, { rope: [a, y] }), 40);
+    const blade = blades && { arrow: a, from: Math.max(...arrows[y].ray.map((c) => arrows[a].cells.indexOf(c))) };
+    const rope = bestOf(() => grow(null, blade ? { cut: blade } : { rope: [a, y] }), blades ? 80 : 40);
     if (!rope) return unplace(1);
     place(rope);
     arrows[a].knot = arrows[y].knot = knots++;
   }
 
+  // A frozen arrow, if one fits anywhere with nothing round it yet.
+  function addIce() {
+    const ice = bestOf(() => grow(null, { ice: true }), 30);
+    if (!ice) return;
+    place(ice);
+    ices++;
+  }
+
   // One candidate arrow, or null. `avoid` lists cells the arrow must stay off (a
   // partner's exit path). `knot.bull`: the head sits on that arrow's way out and the
   // way out crosses it. `knot.rope`: a lasso aimed back along a line through one of
-  // those arrows, crossing it and nothing else. `knot.run`: a bull, whose way out no
-  // earlier path crosses. `knot.block`: the head sits on that bull's way out.
-  // `knot.wait`: crossing the bull's last k cells and nothing else, with its body on
-  // the blocker's way out; started at one of `starts` ([cell, direction]) if given,
-  // else aimed like a lasso.
+  // those arrows, crossing it and nothing else. `knot.cut`: a samurai aimed back along
+  // a line through that arrow's cells from `from` on (not its head), meeting it there
+  // first, so its cut takes away that cell and every one of it the way crosses after.
+  // `knot.tie`: aimed back along a line through that arrow's body (not its head), its
+  // way crossing that arrow and nothing else, and its body across that arrow's way.
+  // `knot.run`: a bull, whose way out no earlier path crosses. `knot.block`: the head
+  // sits on that bull's way out. `knot.wait`: crossing the bull's last k cells and
+  // nothing else, with its body on the blocker's way out; started at one of `starts`
+  // ([cell, direction]) if given, else aimed like a lasso. `knot.ice`: a frozen arrow,
+  // with no arrow round it yet.
   function grow(avoid, knot = null) {
     let head = Math.floor(rnd() * cube.count);
     let dir;
@@ -1128,6 +1164,10 @@ export function generate(
     if (knot?.wait?.starts) [head, dir] = pick(knot.wait.starts);
     if (knot?.rope || (knot?.wait && !knot.wait.starts)) {
       [head, dir] = aimAt(pick(knot.rope ? arrows[pick(knot.rope)].cells : arrows[knot.wait.bull].cells.slice(0, knot.wait.k)));
+    } else if (knot?.cut) {
+      [head, dir] = aimAt(pick(arrows[knot.cut.arrow].cells.slice(knot.cut.from, -1)));
+    } else if (knot?.tie !== undefined) {
+      [head, dir] = aimAt(pick(arrows[knot.tie].cells.slice(0, -1)));
     } else if (knot?.aim) {
       [head, dir] = aimAt(pick(aims));
     } else if (knot?.bridge !== undefined) {
@@ -1144,6 +1184,7 @@ export function generate(
     const boom = gimmick === 'boomerang' && rnd() < 0.05 + amount * 0.5 ? side : null;
     const disc = gimmick === 'discus' && rnd() < amount * 0.6;
     const lasso = !!knot?.rope;
+    const samurai = !!knot?.cut;
     const path = cube.trace(head, dir, { mirrors, tunnels, canals, wraps: disc ? 1 : 0, boomerang: boom });
     if (!path || path.ray.includes(head)) return null;
     // Tunnels could send a path back over itself; keep those out.
@@ -1153,17 +1194,24 @@ export function generate(
     // free from the start: with `turn` they are dropped (all of them from the middle
     // stages on).
     if (deep && (!knot || knot.aim) && ray.length < 3 && rnd() < turn) return null;
-    // A lasso's or a bull's path crosses exactly one earlier arrow, one of its knot
-    // (the lasso pulls it out; the bull is stuck behind it); any other path crosses none.
+    // A lasso's, a samurai's or a bull's path crosses exactly one earlier arrow, one of
+    // its knot (the lasso pulls it out, the samurai cuts it; the bull is stuck behind
+    // it); any other path crosses none.
     const crossed = [...new Set(ray.map(ownerNow).filter((o) => o >= 0))];
-    const mates = knot?.rope ?? (knot?.bull !== undefined ? [knot.bull] : knot?.wait ? [knot.wait.bull] : null);
-    // An eagle may have its head's way out blocked, as long as its tail's is clear.
-    const eagle = !knot?.fill && gimmick === 'eagle' && rnd() < 0.05 + amount * 0.55;
+    const mates =
+      knot?.rope ??
+      (knot?.bull !== undefined ? [knot.bull] : knot?.wait ? [knot.wait.bull] : knot?.cut ? [knot.cut.arrow] : knot?.tie !== undefined ? [knot.tie] : null);
     // A filler's way out may run into anything (fillGaps checks it).
     // In a clocked world fillers keep to the reverse order too: their way must be clear.
-    const headShut = !mates && (!knot?.fill || period > 0) && crossed.length > 0;
-    if (headShut && !eagle) return null;
+    if (!mates && (!knot?.fill || period > 0) && crossed.length > 0) return null;
     if (mates && (crossed.length !== 1 || !mates.includes(crossed[0]))) return null;
+    // No blade cuts a head, so in a samurai's knot the other arrow keeps off its head.
+    if (knot?.tie !== undefined && ray.includes(arrows[knot.tie].cells.at(-1))) return null;
+    if (knot?.cut) {
+      const own = arrows[knot.cut.arrow].cells;
+      const at = own.indexOf(ray.find((c) => ownerNow(c) >= 0));
+      if (at < knot.cut.from || at >= own.length - 1 || ray.some((c) => own.indexOf(c) > at)) return null;
+    }
     if (knot?.wait) {
       const tail = new Set(arrows[knot.wait.bull].cells.slice(0, knot.wait.k));
       if (ray.some((c) => occ[c] === knot.wait.bull && !tail.has(c))) return null;
@@ -1172,15 +1220,11 @@ export function generate(
     if (knot?.run && (ray.length < 2 || ray.some((c) => rayOwners[c].length))) return null;
     // Clear of the shadows of the sun where it will stand when this arrow leaves.
     if (sundial && ray.some((c) => sundial.shadows[stepNow()].has(c))) return null;
-    if (doorOf.size) {
-      const seen = ray.filter((c) => doorOf.has(c)).map((c) => doorOf.get(c)[0]);
-      if (new Set(seen).size < seen.length) return null;
-    }
-    if (sailOf.size) {
-      const seen = ray.filter((c) => sailOf.has(c)).map((c) => sailOf.get(c).join());
-      const both = new Set(seen);
-      if (mills.some((_, k) => both.has(`${k},0`) && both.has(`${k},1`))) return null;
-    }
+    // Into a panel only where no earlier arrow sits (it is still there when this one
+    // leaves); a filler may wait on one like on anything in its way.
+    const entries = panels ? intoPanels(head, ray) : [];
+    const rooms = [...new Set(entries.flatMap((c) => panels[panelOf.get(c)].cells))].filter((c) => !ray.includes(c));
+    if (!knot?.fill && rooms.some((c) => occ[c] >= 0)) return null;
     // Only guards that will stand open when this arrow leaves (the shut colour then is
     // the bell's setting at its step).
     if (guards.size && ray.some((c) => guards.get(c) === stepNow())) return null;
@@ -1235,18 +1279,23 @@ export function generate(
     if (body.length < lo) return null;
     if (knot?.bridge !== undefined && !body.includes(knot.bridge)) return null;
     if (knot?.wait && !body.some((c) => arrows[knot.wait.hold].ray.includes(c))) return null;
-    // An eagle's second way out starts at its tail, heading on away from the body.
-    let tailWay = null;
-    if (eagle) {
-      tailWay = cube.trace(body.at(-1), back);
-      if (!tailWay || tailWay.ray.some((c) => body.includes(c))) return null;
-      if (headShut && tailWay.ray.some((c) => occ[c] >= 0)) return null;
+    if (knot?.tie !== undefined && !body.some((c) => arrows[knot.tie].ray.includes(c))) return null;
+    // A frozen arrow: nothing may touch it yet, and the cells round it (but on its way
+    // out) are what it waits on besides.
+    let around = [];
+    if (knot?.ice) {
+      const own = new Set(body);
+      around = [...new Set(body.flatMap((c) => cube.tangents(c).map((t) => cube.step(c, t).id)))].filter((c) => !own.has(c));
+      if (around.some((c) => occ[c] >= 0)) return null;
+      around = around.filter((c) => !ray.includes(c));
     }
-    // Tiles crossed (and, with a sundial, shadows crossed) make an arrow more
-    // interesting, so they count towards picking it.
+    // Tiles crossed (and, with a sundial, shadows crossed, or panels run into) make an
+    // arrow more interesting, so they count towards picking it.
     const shaded = sundial ? sundial.shadows.filter((shade) => ray.some((c) => shade.has(c))).length : 0;
-    const uses = ray.reduce((s, c) => s + fixed[c], 0) + shaded;
-    const two = tailWay ? { ray2: tailWay.ray, dir2: back, exitDir2: tailWay.exitDir } : {};
-    return { body: body.reverse(), dir, ray, exitDir, jumps, crossings, uses, disc, tint, lasso, boom, diag, run: !!knot?.run, ...two };
+    const uses = ray.reduce((s, c) => s + fixed[c], 0) + shaded + entries.length;
+    return {
+      body: body.reverse(), dir, ray, exitDir, jumps, crossings, uses, disc, tint, lasso, samurai, boom, diag, run: !!knot?.run,
+      ice: !!knot?.ice, extra: knot?.ice ? around : rooms.filter((c) => !body.includes(c)),
+    };
   }
 }

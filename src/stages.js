@@ -33,7 +33,11 @@ const HOME = [
 // wrong taps along t^k, slowly at first and faster as the cube grows. Gimmicks make
 // big cubes harder by different amounts, so each world's ends and bend follow its own
 // generated puzzles (about a third of the way up their spread at points 1, 5, 10, …,
-// 40 of the curve), with point 40 well above the old 20-stage curve's last.
+// 40 of the curve), with point 40 well above the old 20-stage curve's last. Worlds
+// tuned after play (2026-11-02, fitted with tools/calibrate.mjs on stages 1–30) sit
+// higher or lower in their spread: 브라질 along its hardest tenth, 튀르키예 at three
+// quarters, 영국 at four fifths, 태국 under a third. Such a curve's `start` (point 1,
+// before stage 1) can come out below zero.
 const GIMMICK_STAGES = 40;
 // Where on that curve each stage now sits (user request 2026-10-31: harder from the
 // start): stage 1 plays like point 10, stage 5 like 20, 15 like 25, 25 like 35, and on
@@ -96,7 +100,7 @@ export const WORLDS = {
   },
   bell: {
     name: '영국 · 빅벤', tier: 3, about: '화살표가 하나 나갈 때마다 닫힌 색이 바뀜',
-    stages: gimmickStages('bell', 19, 135, 1), seedBase: 4_000_000,
+    stages: gimmickStages('bell', -66.5, 201, 0.6), seedBase: 4_000_000,
   },
   discus: {
     name: '그리스 · 원반', tier: 1, about: '모서리를 넘어 옆면까지 날아감',
@@ -106,13 +110,13 @@ export const WORLDS = {
     name: '캐나다 · 오로라', tier: 1, about: '같은 색만 통과, 그 색이 다 빠지면 커튼이 걷힘',
     stages: gimmickStages('aurora', 12.5, 325, 1.75), seedBase: 6_000_000,
   },
-  belt: {
-    name: '독일 · 벨트', tier: 3, about: '벨트를 돌려 화살표 위치를 맞춤',
-    stages: gimmickStages('belt', 16, 555, 1.8), seedBase: 7_000_000,
+  wall: {
+    name: '독일 · 베를린 장벽', tier: 3, about: '장벽은 그 면에서 화살표가 숫자만큼 빠지면 무너짐',
+    stages: gimmickStages('wall', -5, 282, 1.4), seedBase: 7_000_000,
   },
   tunnel: {
     name: '튀르키예 · 터널', tier: 3, about: '한 입구로 들어가 짝 입구로 나옴',
-    stages: gimmickStages('tunnel', 14.5, 375, 1.95), seedBase: 10_000_000,
+    stages: gimmickStages('tunnel', -14.5, 409, 1.35), seedBase: 10_000_000,
   },
   sundial: {
     name: '이집트 · 해시계', tier: 1, about: '화살표가 하나 나갈 때마다 해가 돌고 기둥 그림자도 따라 움직임',
@@ -134,9 +138,9 @@ export const WORLDS = {
     name: '이탈리아 · 운하', tier: 2, about: '물길에 들어가면 흐름을 따라감',
     stages: gimmickStages('canal', 8, 270, 1.75), seedBase: 16_000_000,
   },
-  eagle: {
-    name: '러시아 · 쌍두독수리', tier: 2, about: '양쪽 끝 중 열린 쪽으로 나감',
-    stages: gimmickStages('eagle', 13.5, 100, 1.3), seedBase: 17_000_000,
+  ice: {
+    name: '러시아 · 시베리아 얼음', tier: 2, about: '얼음 속 화살표는 맞닿은 칸에 다른 화살표가 하나도 없어야 나갈 수 있음',
+    stages: gimmickStages('ice', -3, 313, 1.5), seedBase: 17_000_000,
   },
   encierro: {
     name: '스페인 · 소몰이', tier: 2, about: '막힌 황소는 장애물 앞까지 돌진해 꼬리 자리를 비움',
@@ -144,23 +148,23 @@ export const WORLDS = {
   },
   vine: {
     name: '브라질 · 덩굴', tier: 2, about: '칼 화살표가 지나가는 덩굴은 칼이 빠지면 잘려 나감',
-    stages: gimmickStages('vine', 8.5, 280, 1.65), seedBase: 19_000_000,
+    stages: gimmickStages('vine', -34, 330, 1), seedBase: 19_000_000,
   },
   lantern: {
     name: '태국 · 등불', tier: 2, about: '그림자 속은 등불과 그 빛줄기만 보이고, 등불이 빠지면 그림자가 걷힘',
-    stages: gimmickStages('lantern', 19.5, 660, 2.15), seedBase: 20_000_000,
+    stages: gimmickStages('lantern', 4.5, 534, 2), seedBase: 20_000_000,
   },
   diagonal: {
     name: '인도 · 차투랑가', tier: 3, about: '대각선으로 나가는 화살표',
     stages: gimmickStages('diagonal', 12, 335, 1.8), seedBase: 21_000_000,
   },
-  shoji: {
-    name: '일본 · 장지문', tier: 3, about: '레일 칸을 눌러 그 칸의 문을 엶',
-    stages: gimmickStages('shoji', 23, 790, 2.2), seedBase: 22_000_000,
+  samurai: {
+    name: '일본 · 사무라이', tier: 3, about: '사무라이는 길을 막는 화살표 하나를 베고 지나가고, 벤 곳부터 꼬리 쪽은 사라짐',
+    stages: gimmickStages('samurai', 2, 291, 1.4), seedBase: 22_000_000,
   },
-  windmill: {
-    name: '네덜란드 · 풍차', tier: 3, about: '축을 눌러 날개를 가로↔세로로 돌림',
-    stages: gimmickStages('windmill', 19, 1135, 2.1), seedBase: 23_000_000,
+  mondrian: {
+    name: '네덜란드 · 몬드리안', tier: 3, about: '다른 화살표가 남은 칸막이 안으로는 들어갈 수 없음',
+    stages: gimmickStages('mondrian', -16, 256, 1.25), seedBase: 23_000_000,
   },
 };
 

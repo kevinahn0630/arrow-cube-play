@@ -12,14 +12,16 @@ for (const x of [0, 1]) for (const y of [2, 3]) for (const z of [4, 5]) VIEWS.pu
 // How hard an arrow is to follow by eye: long bodies, ones that wrap over cube edges,
 // and exit paths bent by mirrors, carried by canals, turning back (boomerangs),
 // running corner-wise (diagonals), or on over an edge or through a tunnel are easy to
-// lose track of.
+// lose track of; so are a samurai's (what does it cut, what is left in the way?) and a
+// frozen arrow (is anything touching it?).
 const tangle = (len, crossings, bends) => 0.06 * Math.max(0, len - 3) + 0.2 * crossings + 0.3 * bends;
 const faceChanges = (cube, cells) => cells.slice(1).filter((c, i) => cube.faceOf(c) !== cube.faceOf(cells[i])).length;
 // Chance a free arrow is recognised as free.
 const spotFree = (t) => Math.max(0.6, 0.92 - 0.08 * t);
 // Chance a blocked arrow is mistaken for free. A blocker right at the head (or any
 // gate or guard tile, which are easy to see) is obvious; an arrow several cells away
-// is easy to miss, more so on a tangled arrow.
+// is easy to miss, more so on a tangled arrow, and so is one just touching a frozen
+// arrow (counted as two cells away).
 const misjudge = (k, t) => Math.min(0.75, 0.35 * (1 - Math.exp(-k / 2.5)) * (1 + t));
 
 function shuffle(a, rnd) {
@@ -38,7 +40,7 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
       a.cells.length,
       faceChanges(cube, a.cells),
       a.ray.filter((c) => puz.mirrors.has(c)).length + a.jumps.length + 1.5 * faceChanges(cube, [a.cells.at(-1), ...a.ray]) +
-        0.5 * a.ray.filter((c) => puz.canals?.has(c)).length + (a.boom ? 1.5 : 0) + (a.diag ? 2 : 0),
+        0.5 * a.ray.filter((c) => puz.canals?.has(c)).length + (a.boom ? 1.5 : 0) + (a.diag ? 2 : 0) + (a.samurai ? 1.5 : 0) + (a.ice ? 1 : 0),
     ),
   );
   let wrong = 0;
@@ -47,7 +49,7 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
 
   for (let r = 0; r < runs; r++) {
     const state = newState(puz);
-    // Belt arrows move, so which face shows their head is looked up as they are.
+    // Dial arrows move, so which face shows their head is looked up as they are.
     const headFace = (i) => cube.faceOf(pose(puz, state, i).cells.at(-1));
     // Whether the dark leaves arrow i in doubt: its head is hidden (it could point
     // anywhere), or its way out runs into the dark before any blocker in plain sight
@@ -59,19 +61,6 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
       const b = blockAt(puz, state, i);
       for (let k = 0; k <= (b ? b.k : ray.length - 1); k++) if (darkCell(puz, state, ray[k])) return true;
       return false;
-    };
-    // If a door panel, a sail, or an arrow on the belt is what stops arrow i, the move
-    // that clears it (or tries to: a moved belt may bring another arrow round).
-    const switchFor = (i) => {
-      const b = blockAt(puz, state, i);
-      if (b?.o >= 0 && arrows[b.o].slot >= 0) return () => (state.shift = (state.shift + 1) % puz.belt.cells.length);
-      if (!b?.tile) return null;
-      const c = pose(puz, state, i).ray[b.k];
-      const door = puz.doorOf?.get(c);
-      if (door) return () => (state.doors[door[0]] = door[1]);
-      const sail = puz.sailOf?.get(c);
-      if (sail) return () => (state.mills[sail[0]] = 1 - sail[1]);
-      return null;
     };
     const alive = new Set(arrows.keys());
     const known = new Set(); // arrows this player already found blocked, until something moves
@@ -96,7 +85,7 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
             break;
           }
           const b = blockAt(puz, state, j);
-          const k = !b ? -1 : b.tile ? 0 : b.k;
+          const k = !b ? -1 : b.tile ? 0 : b.ice ? 2 : b.k;
           if (b) blocked = true;
           const p = inDoubt(j) ? 0.35 : k < 0 ? spotFree(tangles[j]) : misjudge(k, tangles[j]);
           if (!(rnd() < p)) {
@@ -130,30 +119,9 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
         break;
       }
       if (!acted) {
-        // Stuck in this view. A shut door, a sail, or a belt arrow right in the way of
-        // an arrow in view is plain to see, so the player moves that one; otherwise
-        // moves the belt a step, a door or a windmill if there is one, or turns the
-        // cube. The sun, the dials and the bell move by themselves (clocked), so there
-        // the player can only turn the cube.
-        const movable = puz.doors || puz.mills || puz.belt;
-        const shut = movable && rnd() < 0.8 ? seen.map((i) => switchFor(i)).find(Boolean) : null;
-        if (shut) {
-          shut();
-          known.clear();
-        } else if (puz.belt && rnd() < 0.5) {
-          const L = puz.belt.cells.length;
-          state.shift = (state.shift + (rnd() < 0.5 ? 1 : L - 1)) % L;
-          known.clear();
-        } else if (puz.doors && rnd() < 0.5) {
-          state.doors[Math.floor(rnd() * puz.doors.length)] = Math.floor(rnd() * 3);
-          known.clear();
-        } else if (puz.mills && rnd() < 0.5) {
-          const m = Math.floor(rnd() * puz.mills.length);
-          state.mills[m] = 1 - state.mills[m];
-          known.clear();
-        } else {
-          view = (view + 1 + Math.floor(rnd() * (VIEWS.length - 1))) % VIEWS.length;
-        }
+        // Stuck in this view: turn the cube. (The sun, the dials and the bell move by
+        // themselves; nothing else needs a hand.)
+        view = (view + 1 + Math.floor(rnd() * (VIEWS.length - 1))) % VIEWS.length;
         turns++;
       }
     }
@@ -177,21 +145,30 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
   };
 }
 
-// Whether the gimmick failed to take in a puzzle: a lasso or stampede puzzle that is
-// solvable without it, or a lantern puzzle where no lantern fitted.
-export const lacksGimmick = (puz) =>
-  ((puz.gimmick === 'lasso' || puz.gimmick === 'encierro') && !stuckWithout(puz)) ||
-  (puz.gimmick === 'lantern' && !puz.arrows.some((a) => a.lantern));
+// Whether the gimmick failed to take in a puzzle: a lasso, samurai or stampede puzzle
+// that is solvable without it, a lantern puzzle where no lantern fitted, a wall puzzle
+// left without walls, a Mondrian one where no way out runs into a panel someone else
+// sits in, or an ice one where nothing touches any frozen arrow.
+export function lacksGimmick(puz) {
+  const { gimmick } = puz;
+  if (gimmick === 'lasso' || gimmick === 'samurai' || gimmick === 'encierro') return !stuckWithout(puz);
+  if (gimmick === 'lantern') return !puz.arrows.some((a) => a.lantern);
+  if (gimmick === 'wall') return !puz.walls.length;
+  if (gimmick === 'mondrian' || gimmick === 'ice') return !puz.arrows.some((a, i) => a.extra.some((c) => puz.occ[c] >= 0 && puz.occ[c] !== i));
+  return false;
+}
 
 // How much of a puzzle its gimmick takes up: the share of arrows that are gimmick
-// arrows themselves (keys, pairs, discs, lassos, bulls, …), whose way out runs into
-// the gimmick's cells (gates, mirrors, curtains, the belt, shadows, dials, canals,
-// vines, doors, sails) or into a gimmick arrow (so they wait on it), that sit in the
-// dark, or that cannot leave without lassos or charges.
+// arrows themselves (keys, pairs, discs, lassos, samurais, bulls, frozen arrows, …,
+// and those whose way out runs into a Mondrian panel), whose way out runs into the
+// gimmick's cells (gates, mirrors, curtains, shadows, dials, canals, vines, walls) or
+// into a gimmick arrow (so they wait on it), that sit in the dark, that touch a frozen
+// arrow (it waits on them), or that cannot leave without lassos, cuts or charges.
 export function gimmickShare(puz) {
   const { arrows, gimmick } = puz;
   if (!gimmick || !arrows.length) return 0;
   const keys = (m) => new Set(m.keys());
+  const intoPanel = (a) => a.ray.some((c, k) => puz.panelOf.has(c) && puz.panelOf.get(c) !== puz.panelOf.get(k ? a.ray[k - 1] : a.cells.at(-1)));
   // [is a gimmick arrow, the gimmick's cells]
   const [own, cells] = {
     gate: [(a) => a.gates.length > 0, () => new Set(arrows.flatMap((a) => a.gates))],
@@ -200,14 +177,13 @@ export function gimmickShare(puz) {
     bell: [null, () => keys(puz.guards)],
     discus: [(a) => a.disc],
     aurora: [(a) => a.tint >= 0, () => keys(puz.curtains)],
-    belt: [(a) => a.slot >= 0, () => new Set(puz.belt.cells)],
     tunnel: [(a) => a.jumps.length > 0],
     sundial: [null, () => new Set([...puz.sundial.obelisks, ...puz.sundial.shadows.flatMap((s) => [...s])])],
     lasso: [(a) => a.lasso || a.knot >= 0],
     dial: [(a) => a.dial >= 0, () => keys(puz.dialOf)],
     boomerang: [(a) => !!a.boom],
     canal: [null, () => keys(puz.canals)],
-    eagle: [(a) => !!a.ray2],
+    ice: [(a) => a.ice],
     encierro: [(a) => a.run],
     vine: [(a) => a.machete, () => new Set(arrows.filter((a) => a.machete).flatMap((a) => a.gates))],
     lantern: [(a) => a.lantern, () => {
@@ -215,15 +191,18 @@ export function gimmickShare(puz) {
       return new Set([...puz.darkOf.keys()].filter((c) => darkCell(puz, state, c)));
     }],
     diagonal: [(a) => a.diag],
-    shoji: [null, () => keys(puz.doorOf)],
-    windmill: [null, () => keys(puz.sailOf)],
+    samurai: [(a) => a.samurai || a.knot >= 0],
+    wall: [null, () => keys(puz.wallOf)],
+    mondrian: [intoPanel],
   }[gimmick];
   const set = new Set(cells?.());
   for (const a of arrows) if (own?.(a)) for (const c of a.cells) set.add(c);
-  const held = gimmick === 'lasso' || gimmick === 'encierro' ? stuck(puz) : null;
+  const held = gimmick === 'lasso' || gimmick === 'samurai' || gimmick === 'encierro' ? stuck(puz) : null;
+  const touch = gimmick === 'ice' ? new Set(arrows.filter((a) => a.ice).flatMap((a) => a.extra)) : null;
   const meets = (cs) => cs.some((c) => set.has(c));
   const n = arrows.filter(
-    (a, i) => own?.(a) || held?.has(i) || meets(a.ray) || meets(a.ray2 ?? []) || (gimmick === 'lantern' && meets(a.cells)),
+    (a, i) =>
+      own?.(a) || held?.has(i) || meets(a.ray) || (gimmick === 'lantern' && meets(a.cells)) || (touch && a.cells.some((c) => touch.has(c))),
   ).length;
   return n / arrows.length;
 }

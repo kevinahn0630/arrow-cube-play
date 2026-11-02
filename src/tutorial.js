@@ -9,12 +9,10 @@
 //   'leave'  — the arrow it finds has left
 //   'bump'   — the arrow it finds was tapped and bumped back
 //   'charge' — the bull it finds charged
-//   'switch' — the player moved the belt, a door or a windmill so that the next
-//              step finds its arrow; `mark: k` keeps step k's arrow lit meanwhile
 //   'next'   — the player read it (the 다음 button); `look` turns the cube to a tile
 //   'clear'  — every arrow is gone
 // `find` names a finder (see findTarget); `name:k` passes the arrow found in step k.
-import { newState, canExit, remove, blockAt, pose, caughtBy, charge, solve, clocked, deadEnd, group, exitEnd, inDark } from './rules.js';
+import { newState, copyState, canExit, remove, blockAt, ownerAt, pose, caughtBy, cutBy, charge, solve, clocked, deadEnd, group, inDark } from './rules.js';
 
 const LAST = '남은 화살표도 모두 빼 보세요.';
 
@@ -96,15 +94,16 @@ export const TUTORIALS = {
       { say: LAST, until: 'clear' },
     ],
   },
-  belt: {
+  wall: {
     N: 4,
-    fill: 0.3,
-    amount: 0.3,
+    fill: 0.35,
+    amount: 0,
     steps: [
-      { say: '벨트 위의 짧은 화살표들은 벨트와 함께 움직여요. 이 벨트 화살표는 지금 자리에서는 길이 막혀 있어요. 눌러 보세요.', find: 'blockedKind:slot', until: 'bump' },
-      { say: '벨트를 손가락으로 끌어서(또는 ◁ ▷ 버튼으로) 돌려, 이 화살표를 길이 열린 자리로 옮겨 보세요.', until: 'switch', mark: 0 },
-      { say: '길이 열린 자리에 왔어요! 빼 보세요.', find: 'target:0', until: 'leave' },
-      { say: `벨트 화살표는 길이 열린 자리로 옮겨서 빼요. ${LAST}`, until: 'clear' },
+      { say: '회색 칸은 장벽이라 지나갈 수 없어요. 장벽의 숫자는 이 면에서 화살표를 몇 개 더 빼야 장벽이 무너지는지 알려 줘요.', until: 'next', look: 'wall' },
+      { say: '이 화살표는 장벽에 막혀 있어요. 눌러 보세요.', find: 'wallBlocked', until: 'bump' },
+      { say: '장벽이 있는 면에서 화살표가 하나 빠질 때마다 숫자가 하나 줄어요. 이 화살표를 빼 보세요.', find: 'wallFace:1', until: 'leave' },
+      { say: '숫자가 0이 되어 장벽이 무너졌어요! 이제 이 화살표가 지나갈 수 있어요.', find: 'target:1', until: 'leave' },
+      { say: `장벽을 빨리 무너뜨리려면 그 면의 화살표부터 빼요. ${LAST}`, until: 'clear' },
     ],
   },
   tunnel: {
@@ -167,13 +166,14 @@ export const TUTORIALS = {
       open: '이제 물길을 따라 나갈 수 있어요.',
     }),
   },
-  eagle: {
+  ice: {
+    N: 4,
+    fill: 0.45,
     steps: [
-      { say: '양쪽 끝에 머리가 있는 독수리 화살표는 두 방향 중 열린 쪽으로 나가요. 이 독수리는 앞쪽이 막혀 있어요. 눌러 보세요.', find: 'eagleTail', until: 'leave' },
-      { say: '이 독수리는 양쪽 길이 다 막혀 있어요. 눌러 보세요.', find: 'eagleShut', until: 'bump' },
-      { say: '두 쪽이 다 막혀 있을 때만 막힌 거예요. 한쪽 길을 막는 이 화살표를 빼 주세요.', find: 'blockerOf:1', until: 'leave' },
-      { say: '이제 독수리가 열린 쪽으로 나갈 수 있어요.', find: 'target:1', until: 'leave' },
-      { say: LAST, until: 'clear' },
+      { say: '얼음 속 화살표는 맞닿은 칸에 다른 화살표가 있으면 얼어붙어 나갈 수 없어요. 길이 비어 있어도요. 눌러 보세요.', find: 'iceHeld', until: 'bump' },
+      { say: '얼음에 닿아 있는 이 화살표를 빼 주세요.', find: 'iceToucher:0', until: 'leave' },
+      { say: '맞닿은 칸이 모두 비어서 얼음이 녹았어요! 이제 나갈 수 있어요.', find: 'target:0', until: 'leave' },
+      { say: `얼음은 몸통 전체의 둘레를 봐야 해요. ${LAST}`, until: 'clear' },
     ],
   },
   encierro: {
@@ -214,22 +214,25 @@ export const TUTORIALS = {
       open: '이제 대각선으로 나갈 수 있어요.',
     }),
   },
-  shoji: {
-    amount: 0.2,
+  samurai: {
+    N: 4,
+    fill: 0.45,
     steps: [
-      { say: '레일 위 세 칸 중 한 칸만 열린 미닫이문이에요. 종이가 붙은 칸(닫힌 문)은 지나갈 수 없어요. 빛나는 레일 칸을 눌러 보세요.', until: 'switch' },
-      { say: '누른 칸이 열리고 다른 칸이 닫혔어요. 열린 문을 지나는 이 화살표를 빼 보세요.', find: 'through:doors', until: 'leave' },
-      { say: `문은 언제든 다시 옮길 수 있어요. ${LAST}`, until: 'clear' },
+      { say: '이 화살표는 길이 막혀 있어요. 눌러 보세요.', find: 'cutFrees', until: 'bump' },
+      { say: '칼 머리를 한 사무라이는 길을 막는 화살표 하나를 베고 지나가요. 벤 곳부터 꼬리 쪽은 잘려 나가고 머리 쪽만 남아요. 사무라이를 빼 보세요.', find: 'cutterOf:0', until: 'leave' },
+      { say: '길을 막던 몸통이 잘려 나갔어요! 이제 이 화살표가 나갈 수 있어요.', find: 'target:0', until: 'leave' },
+      { say: `머리는 벨 수 없고, 하나를 벤 뒤에 또 막히면 사무라이도 못 나가요. ${LAST}`, until: 'clear' },
     ],
   },
-  windmill: {
-    N: 5,
-    fill: 0.3,
+  mondrian: {
+    N: 4,
+    fill: 0.35,
     amount: 0.1,
     steps: [
-      { say: '풍차 날개가 놓인 칸은 지나갈 수 없어요. 가운데 축(갈색)을 눌러 날개를 돌려 보세요.', until: 'switch' },
-      { say: '날개가 가로↔세로로 돌았어요. 날개가 비킨 칸을 지나는 이 화살표를 빼 보세요.', find: 'through:sails', until: 'leave' },
-      { say: `날개는 언제든 다시 돌릴 수 있어요. ${LAST}`, until: 'clear' },
+      { say: '검은 테두리를 두른 칸막이 안에 다른 화살표가 있으면, 그 칸막이 안으로는 들어갈 수 없어요. 이 화살표를 눌러 보세요.', find: 'panelBlocked', until: 'bump' },
+      { say: '칸막이 안에 있는 이 화살표를 빼서 칸막이를 비워 주세요.', find: 'panelKeeper:0', until: 'leave' },
+      { say: '칸막이가 비었어요! 이제 이 화살표가 그 안을 지나갈 수 있어요.', find: 'target:0', until: 'leave' },
+      { say: `칸막이 안의 화살표는 몸통이 조금만 걸쳐 있어도 칸막이를 막아요. ${LAST}`, until: 'clear' },
     ],
   },
 };
@@ -249,8 +252,6 @@ const CELLS = {
   mirrors: (puz) => new Set(puz.mirrors.keys()),
   guards: (puz) => new Set(puz.guards.keys()),
   canals: (puz) => new Set(puz.canals.keys()),
-  doors: (puz) => new Set(puz.doorOf?.keys() ?? []),
-  sails: (puz) => new Set(puz.sailOf?.keys() ?? []),
   // Every cell a shadow falls on with the sun anywhere.
   shadows: (puz) => new Set(puz.sundial?.shadows.flatMap((s) => [...s]) ?? []),
 };
@@ -258,7 +259,6 @@ const CELLS = {
 // Arrow kinds a `kind:` finder looks for.
 const KIND = {
   disc: (a) => a.disc,
-  slot: (a) => a.slot >= 0,
   boom: (a) => !!a.boom,
   lantern: (a) => a.lantern,
   diag: (a) => a.diag,
@@ -297,6 +297,24 @@ export function findTarget(puz, state, alive, find, targets) {
     return b && b.o >= 0 && b.o !== i && !b.tile && free(b.o) ? b : null;
   };
   const t = Number(arg);
+  // The panel holding arrow i up, if that is what stops it, and the arrows other than
+  // i sitting in panel p.
+  const panelHolding = (i) => {
+    if (free(i)) return undefined;
+    const b = blockAt(puz, state, i);
+    return b && b.o < 0 && !b.tile ? puz.panelOf?.get(pose(puz, state, i).ray[b.k]) : undefined;
+  };
+  const sitters = (p, i) => [...new Set(puz.panels[p].cells.map((c) => state.occ[c]).filter((o) => o >= 0 && o !== i))];
+  // The arrows touching frozen arrow i.
+  const touching = (i) => [...new Set(puz.arrows[i].extra.map((c) => ownerAt(puz, state, c)).filter((o) => o >= 0 && o !== i))];
+  // A samurai that can leave now and whose cut lets arrow i leave.
+  const cutterFor = (i) =>
+    live.find((s) => {
+      if (!puz.arrows[s].samurai || !free(s) || !cutBy(puz, state, s)) return false;
+      const after = copyState(state);
+      remove(puz, after, s);
+      return canExit(puz, after, i);
+    }) ?? -1;
   switch (name) {
     case 'free':
       return first(free);
@@ -337,8 +355,6 @@ export function findTarget(puz, state, alive, find, targets) {
     }
     case 'kind':
       return first((i) => KIND[arg](puz.arrows[i]) && free(i));
-    case 'blockedKind':
-      return first((i) => KIND[arg](puz.arrows[i]) && !free(i) && !inDark(puz, state, i));
     case 'near': {
       // A free arrow with its head on the same face as the first dial.
       const face = puz.cube.faceOf(lookCell(puz, arg));
@@ -348,10 +364,25 @@ export function findTarget(puz, state, alive, find, targets) {
       return first((i) => free(i) && pose(puz, state, i).jumps.length > 0);
     case 'lasso':
       return first((i) => puz.arrows[i].lasso && free(i) && !!caughtBy(puz, state, i));
-    case 'eagleTail':
-      return first((i) => puz.arrows[i].ray2 && free(i) && exitEnd(puz, state, i) === 1);
-    case 'eagleShut':
-      return first((i) => puz.arrows[i].ray2 && !free(i) && !!freeBlocker(i));
+    case 'iceHeld':
+      // A frozen arrow with its way out clear, held by one arrow touching it that can
+      // leave now.
+      return first((i) => {
+        if (!blockAt(puz, state, i)?.ice) return false;
+        const by = touching(i);
+        return by.length === 1 && free(by[0]);
+      });
+    case 'iceToucher': {
+      // The one arrow touching step t's frozen arrow, if it can leave now.
+      if (!alive.has(targets[t])) return -1;
+      const by = touching(targets[t]);
+      return by.length === 1 && free(by[0]) ? by[0] : -1;
+    }
+    case 'cutFrees':
+      // Held up by another arrow, until a samurai's cut sets it free.
+      return first((i) => !free(i) && !puz.arrows[i].samurai && blockAt(puz, state, i)?.o >= 0 && cutterFor(i) >= 0);
+    case 'cutterOf':
+      return alive.has(targets[t]) ? cutterFor(targets[t]) : -1;
     case 'canCharge':
       return first((i) => {
         if (!puz.arrows[i].run || free(i)) return false;
@@ -381,6 +412,36 @@ export function findTarget(puz, state, alive, find, targets) {
       const own = (i) => pose(puz, state, i).ray.some((c) => puz.curtains.get(c) === colour);
       return ok.find(own) ?? ok[0] ?? -1;
     }
+    case 'wallBlocked':
+      // Held up by a wall.
+      return first((i) => {
+        if (free(i)) return false;
+        const b = blockAt(puz, state, i);
+        return !!b && b.tile && b.o < 0 && !!puz.wallOf?.has(pose(puz, state, i).ray[b.k]);
+      });
+    case 'wallFace': {
+      // An arrow that can leave now from the face of the wall holding step t's arrow up.
+      if (!alive.has(targets[t])) return -1;
+      const b = blockAt(puz, state, targets[t]);
+      const w = b?.tile ? puz.wallOf?.get(pose(puz, state, targets[t]).ray[b.k]) : undefined;
+      if (w === undefined) return -1;
+      return first((i) => i !== targets[t] && free(i) && puz.cube.faceOf(pose(puz, state, i).cells.at(-1)) === puz.walls[w].face);
+    }
+    case 'panelBlocked':
+      // Held up by a panel only one arrow sits in, which can leave now.
+      return first((i) => {
+        const p = panelHolding(i);
+        if (p === undefined) return false;
+        const inside = sitters(p, i);
+        return inside.length === 1 && free(inside[0]);
+      });
+    case 'panelKeeper': {
+      // The one arrow in the panel holding step t's arrow up, if it can leave now.
+      if (!alive.has(targets[t])) return -1;
+      const p = panelHolding(targets[t]);
+      const inside = p === undefined ? [] : sitters(p, targets[t]);
+      return inside.length === 1 && free(inside[0]) ? inside[0] : -1;
+    }
     case 'lanternBlocker':
       // What stands first in a lantern's way, if it can leave now.
       for (const L of live) {
@@ -405,53 +466,13 @@ export function lookCell(puz, look) {
       return puz.dials[0].centre;
     case 'lantern':
       return puz.arrows.find((a) => a.lantern).cells.at(-1);
+    case 'wall':
+      return puz.walls[0].cells[Math.floor(puz.walls[0].cells.length / 2)];
     default:
       throw new Error(`unknown tutorial look ${look}`);
   }
 }
 
-// Ways a player can move the switches of a puzzle: a belt step either way, any door
-// opened elsewhere, any windmill swung. Each says which cell to tap (a door's track
-// cell, a windmill's hub; none for the belt) and how far the belt turns.
-function switchMoves(puz, state) {
-  const moves = [];
-  if (puz.belt) {
-    const L = puz.belt.cells.length;
-    for (let d = 1; d < L; d++) moves.push({ belt: d <= L / 2 ? d : d - L, apply: (s) => (s.shift = (s.shift + d) % L) });
-  }
-  puz.doors?.forEach((door, k) => {
-    for (let j = 0; j < 3; j++) {
-      if (j !== state.doors[k]) moves.push({ cell: door.track[j * door.width], apply: (s) => (s.doors[k] = j) });
-    }
-  });
-  puz.mills?.forEach((m, k) => moves.push({ cell: m.hub, apply: (s) => (s.mills[k] = 1 - s.mills[k]) }));
-  return moves;
-}
-
-const copy = (s) => ({
-  ...s,
-  occ: Int32Array.from(s.occ),
-  tints: [...s.tints],
-  slots: s.slots && Int32Array.from(s.slots),
-  dials: [...s.dials],
-  dialOcc: s.dialOcc && Int32Array.from(s.dialOcc),
-  doors: [...s.doors],
-  mills: [...s.mills],
-  ran: Int32Array.from(s.ran),
-});
-
-// The switch move that lets `find` find its arrow, the fewest belt steps first, or
-// null. The game lights it up; rehearse makes it.
-export function switchHint(puz, state, alive, find, targets) {
-  const moves = switchMoves(puz, state).sort((a, b) => Math.abs(a.belt ?? 0) - Math.abs(b.belt ?? 0));
-  return (
-    moves.find((m) => {
-      const s = copy(state);
-      m.apply(s);
-      return findTarget(puz, s, alive, find, targets) >= 0;
-    }) ?? null
-  );
-}
 
 // Whether every arrow in `alive` can still be taken out from `state`. A clocked puzzle
 // is searched through (its switch moves on with every arrow, so the greedy solver's
@@ -464,7 +485,7 @@ export function solvable(puz, state, alive, memo = new Set()) {
   if (memo.has(key)) return false;
   for (const i of alive) {
     if (!canExit(puz, state, i)) continue;
-    const s = copy(state);
+    const s = copyState(state);
     remove(puz, s, i);
     const rest = new Set(alive);
     rest.delete(i);
@@ -485,7 +506,7 @@ export function deadEndChance(puz, state, alive, memo = new Map()) {
   if (out.length) {
     p = 0;
     for (const i of out) {
-      const s = copy(state);
+      const s = copyState(state);
       remove(puz, s, i);
       const rest = new Set(alive);
       rest.delete(i);
@@ -497,10 +518,9 @@ export function deadEndChance(puz, state, alive, memo = new Map()) {
 }
 
 // Plays a world's tutorial through as a player following it would, on its puzzle:
-// each step finds its arrow when it should, a switch step is needed (its next step
-// finds nothing before the move) and some move does it, and what is left for the last
-// step can all be taken out. Returns { ok, why } and, when ok, the state and arrows
-// left when the last step begins.
+// each step finds its arrow when it should, and what is left for the last step can
+// all be taken out. Returns { ok, why } and, when ok, the state and arrows left when
+// the last step begins.
 export function rehearse(puz, world) {
   const state = newState(puz);
   const alive = new Set(puz.arrows.keys());
@@ -510,15 +530,6 @@ export function rehearse(puz, world) {
     const fail = (why) => ({ ok: false, why: `step ${k + 1}: ${why}` });
     if (step.until === 'clear') return solvable(puz, state, alive) ? { ok: true, state, alive } : fail('the rest cannot be solved');
     if (step.until === 'next') {
-      targets.push(-1);
-      continue;
-    }
-    if (step.until === 'switch') {
-      const next = steps[k + 1].find;
-      if (findTarget(puz, state, alive, next, targets) >= 0) return fail('needs no switch');
-      const move = switchHint(puz, state, alive, next, targets);
-      if (!move) return fail('no switch move opens a way');
-      move.apply(state);
       targets.push(-1);
       continue;
     }

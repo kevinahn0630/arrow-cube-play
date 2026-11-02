@@ -9,15 +9,15 @@
 export const DEFAULT_THEME = {
   // The sky behind the cube: any CSS background. A world with a picture in
   // scenery.js gets it drawn over this.
-  background: 'linear-gradient(180deg, #eef1ff, #dce4fa)',
+  background: 'linear-gradient(180deg, #fde3da, #f8eeec 55%, #ebe8f5)',
   // The world's own colour: its card and cleared stages in the world menu.
-  accent: '#5b6cff',
-  box: { face: '#ffffff', faceOpacity: 0.22, edge: '#b9c3e6' },
+  accent: '#e2786a',
+  box: { face: '#ffffff', faceOpacity: 0.22, edge: '#e3c6cc' },
   arrow: {
-    front: '#25325e', // arrows on faces toward the camera
+    front: '#4a3f5c', // arrows on faces toward the camera
     ghost: '#ffffff', // arrows (and tiles) seen through the cube
     blocked: '#e5484d', // flash after tapping a blocked arrow
-    moving: '#5b6cff', // on its way out
+    moving: '#e2786a', // on its way out
     free: '#12a27e', // "show free arrows" in the generator panel
   },
   // Key/gate and pair colours, so linked things read as linked: one colour per link,
@@ -29,9 +29,6 @@ export const DEFAULT_THEME = {
   guards: ['#f08c2e', '#20a39e'], // Big Ben: the two guard colours
   aurora: ['#1fae6b', '#8b52d6', '#e0457b'], // aurora arrows and their curtains
   disc: '#c27c0e',
-  belt: '#d3d9ee',
-  beltMark: '#9aa5cc',
-  beltHint: '#ffc93c',
   tunnel: '#4a3b2c', // tunnel mouths; each pair is ringed in one of `links`
   obelisk: '#8a6a3b', // sundial obelisks
   obeliskTop: '#e2c48a',
@@ -48,17 +45,19 @@ export const DEFAULT_THEME = {
   lanternGlow: '#ffd166', // the light round a lantern's head
   dark: '#3a3550', // a lantern's shadow, until the lantern leaves
   beam: '#f3dc96', // a lantern's way out where it lights up a shadow
-  eagle: '#b8860b', // double-headed eagles
-  shojiFrame: '#8b5a2b', // shoji tracks and panel frames
-  shojiPaper: '#fbf3df', // shoji panels
-  millHub: '#5d4037', // windmill hubs
-  millSail: '#e2cfa8', // windmill sails
-  millFrame: '#7b5e3b', // the frame on each sail, and marks where they would swing to
+  ice: '#2f6db5', // frozen arrows
+  iceBlock: '#d8eefc', // the ice they sit in, while anything touches them
+  iceEdge: '#8cc6ec', // its frosty rim
+  samurai: '#202028', // samurais: black lacquer, with a katana for a head
   bull: '#231a1a', // bulls (encierro): black, like the bulls of the run
   dialRing: '#c08a2e', // the rim of each dial
   dialHub: '#e9b949', // the hub the player taps to turn it
   dialArrow: '#0f9d9a', // arrows riding a dial: turquoise, with a stepped head
   diag: '#e8761c', // diagonal arrows: henna orange, with a paisley head
+  wall: '#80848e', // Berlin walls: concrete slabs
+  panels: ['#f6cbc4', '#fbe3a0', '#c8d5f2'], // Mondrian panels: pale red, yellow and blue
+  panelLine: '#17181d', // a panel's frame while an arrow sits in it
+  panelOpen: '#c3c8d6', // and once it is empty
   // Each country's mark on its gimmick arrows (game.js drawMarks), in its own colours;
   // on the far faces they show white like the arrows.
   ornament: {
@@ -69,8 +68,11 @@ export const DEFAULT_THEME = {
     rope: '#f3d7a7', // 미국: the twist of a lasso's rope
     honda: '#8a4a14', // and the knot that closes its loop
     dots: ['#fff4d6', '#ffc94a'], // 호주: dot painting along a boomerang
-    crown: '#ffd23f', // 러시아: the crown on each eagle
-    jewel: '#c62828',
+    frost: '#2f6db5', // 러시아: the snowflake on each frozen arrow's tail
+    katana: '#dfe5ea', // 일본: a katana's blade, its back, its guard and the braid of its grip
+    katanaBack: '#8f9aa6',
+    tsuba: '#c9a227',
+    tsukaIto: '#f4f1e8',
     horn: '#d6b77a', // 스페인: a bull's horns
     scarf: '#d4232f', // and the red scarf round its neck
     blade: '#d5dde3', // 브라질: a machete's blade, its back and its hilt
@@ -80,44 +82,44 @@ export const DEFAULT_THEME = {
     flame: '#ffe066',
     henna: '#fff3dc', // 인도: henna dots, and the dark edge of the paisley head
     hennaEdge: '#9c3d0a',
-    gear: '#4a4f5c', // 독일: the cog round each belt arrow
   },
 };
 
-// Per world, keyed like WORLDS in stages.js. Every world has a picture in scenery.js
+// Per world, keyed like WORLDS in stages.js: a calm pastel sky (2026-11-02), the world's
+// own colour, and arrows in a deep tone that reads on it. Every world has a picture in scenery.js
 // over its sky (for 집 안, the wall of a room); the two night skies make the cube glow
 // like a paper lantern (`box`), so arrows stay readable on the dark.
 const sky = (top, middle, bottom) => `linear-gradient(180deg, ${top}, ${middle} 55%, ${bottom})`;
 export const THEMES = {
-  home: { accent: '#5b6cff', background: sky('#e9e6f6', '#f0edf6', '#f4eee7') },
-  gate: { accent: '#d9443b', background: sky('#f3e6da', '#f4efe6', '#e6eee9') },
-  pair: { accent: '#2f6fd6', background: sky('#dbe7f5', '#eef2f8', '#f7f3ea') },
-  mirror: { accent: '#5468d4', background: sky('#dce4f6', '#eef0f8', '#f7efe9') },
-  bell: { accent: '#2b4594', background: sky('#dde3ec', '#edf0f4', '#f1efea') },
-  discus: { accent: '#c9921a', background: sky('#cde5f8', '#e8f3fb', '#fbf6ea') },
+  home: { accent: '#e2786a', background: sky('#f9ebe5', '#f5ece8', '#f1e5e0') },
+  gate: { accent: '#c8564a', background: sky('#f6d8cc', '#f7ece2', '#dbeadf'), box: { edge: '#d9c3b9' }, arrow: { front: '#7a2f3a' } },
+  pair: { accent: '#b9566f', background: sky('#f8d6d0', '#f6ece4', '#d6e9e2'), box: { edge: '#c3dcd2' }, arrow: { front: '#6e3450' } },
+  mirror: { accent: '#7b74c9', background: sky('#ddd6f2', '#f2eef6', '#f8e8e6'), box: { edge: '#d3cbe6' }, arrow: { front: '#3b3a78' } },
+  bell: { accent: '#56689c', background: sky('#dfe4ef', '#f1eff2', '#f4e9e4'), box: { edge: '#d3d7e3' }, arrow: { front: '#2e3a6b' } },
+  discus: { accent: '#3f7cb8', background: sky('#cfe3f3', '#f3f1ea', '#f7e7d6'), box: { edge: '#c8dbe9' }, arrow: { front: '#1f4f78' } },
   aurora: {
     accent: '#13a39a',
-    background: 'linear-gradient(180deg, #0c1930, #13304a 45%, #1c4656 75%, #24525c)',
+    background: 'linear-gradient(180deg, #1b2244, #263a5c 45%, #36586a 75%, #4b6f78)',
     box: { face: '#f2fbfa', faceOpacity: 0.8, edge: '#8fdcd0' },
   },
-  belt: { accent: '#4a4f5c', background: sky('#d6e6f3', '#edf3f2', '#eef1e4') },
-  tunnel: { accent: '#c8323c', background: sky('#f2d6d0', '#f7e8de', '#f2e2cd') },
-  sundial: { accent: '#b9873f', background: sky('#f3dfb8', '#f8ecd6', '#f4e2c4') },
-  lasso: { accent: '#b5651d', background: sky('#cfe3f1', '#f0efe9', '#f8e1c6') },
-  dial: { accent: '#e0a320', background: sky('#d2ecec', '#f3f1e4', '#fae2cc') },
-  boomerang: { accent: '#d2593a', background: sky('#f5cdb8', '#f8e3d2', '#f6d3b1') },
-  canal: { accent: '#2b9bc4', background: sky('#d6e8f4', '#f1f2ec', '#f8ecdc') },
-  eagle: { accent: '#8a5cc8', background: sky('#cdd5ec', '#e6eaf5', '#f4f3f8') },
-  encierro: { accent: '#a3263a', background: sky('#d3e5f4', '#f4efe4', '#f9e4c6') },
-  vine: { accent: '#3c9a3a', background: sky('#c9e8ee', '#eef6ec', '#f5f0de') },
+  wall: { accent: '#6b7080', background: sky('#dbe6f0', '#f0f1ee', '#efe8dc'), box: { edge: '#d6dbe0' } },
+  tunnel: { accent: '#c4545c', background: sky('#f6d6d0', '#f8ebe0', '#f1e3cf'), box: { edge: '#e3cdbd' }, arrow: { front: '#2b4a6b' } },
+  sundial: { accent: '#c0843a', background: sky('#ffd5a2', '#ffeedb', '#dcefee'), box: { edge: '#ead1a8' }, arrow: { front: '#1d6467' } },
+  lasso: { accent: '#c9653a', background: sky('#f9d3b8', '#fbe8da', '#e9dcef'), box: { edge: '#ecc9b5' }, arrow: { front: '#6a2f2a' } },
+  dial: { accent: '#d99a2b', background: sky('#cfeceb', '#f6f0e2', '#fbd9c2'), box: { edge: '#e5d3bd' }, arrow: { front: '#1f5b63' } },
+  boomerang: { accent: '#d2693f', background: sky('#f6c9b0', '#f9e4d4', '#f3d9c8'), box: { edge: '#ebc7b2' }, arrow: { front: '#21585e' } },
+  canal: { accent: '#3a97b8', background: sky('#d4e6f2', '#f3efe6', '#f6e2cf'), box: { edge: '#d5e0e2' }, arrow: { front: '#1e5f6e' } },
+  ice: { accent: '#8a6cc8', background: sky('#d6dcf2', '#ecebf6', '#f6eef2'), box: { edge: '#d4d6ea' }, arrow: { front: '#3d3470' } },
+  encierro: { accent: '#b03a4a', background: sky('#ffd9b8', '#fbeee0', '#f3e0d8'), box: { edge: '#ecd0bd' }, arrow: { front: '#7a2233' } },
+  vine: { accent: '#4a9a62', background: sky('#cdeee6', '#f1f6e8', '#f7ecd2'), box: { edge: '#cfe3d8' }, arrow: { front: '#3a2f5c' } },
   lantern: {
     accent: '#e7832f',
     background: 'linear-gradient(180deg, #14143a, #26245a 40%, #4a356d 72%, #8f5170)',
     box: { face: '#fff4e2', faceOpacity: 0.8, edge: '#f2c879' },
   },
-  diagonal: { accent: '#f08c1c', background: sky('#f7d9bd', '#faecdd', '#f2e5ea') },
-  shoji: { accent: '#c43c4c', background: sky('#f3dfe4', '#f7eeee', '#edf0f3') },
-  windmill: { accent: '#f07a26', background: sky('#d1e3f4', '#ecf2f6', '#f1f2e9') },
+  diagonal: { accent: '#e08a3a', background: sky('#f9d9bf', '#fbede0', '#f1e3ec'), box: { edge: '#ecd2c4' }, arrow: { front: '#5a2a6a' } },
+  samurai: { accent: '#c95b6a', background: sky('#f6dde4', '#f8efef', '#e9eef4'), box: { edge: '#e6d2da' }, arrow: { front: '#5a3d63' } },
+  mondrian: { accent: '#e98a4a', background: sky('#d4e4f4', '#eef2f6', '#f2f0e6'), box: { edge: '#d3dde8' }, arrow: { front: '#2a3f6b' } },
 };
 
 // The full theme for a world: its own entries over the default, one level deep (so
