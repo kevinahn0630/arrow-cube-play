@@ -55,8 +55,11 @@
     pointer-events: none;
   }
   .hud-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .hud-home { width: 46px; height: 46px; padding: 0; display: grid; place-items: center; color: var(--ink); pointer-events: auto; flex: none; }
-  .hud-home svg { width: 22px; height: 22px; }
+  .hud-icon { width: 46px; height: 46px; padding: 0; display: grid; place-items: center; color: var(--ink); pointer-events: auto; flex: none; }
+  .hud-icon svg { width: 22px; height: 22px; }
+  /* The sound button hangs under the home button in the top left corner, as the hearts do under the arrow count. */
+  .hud-corner { position: relative; flex: none; }
+  .hud-sound { position: absolute; top: calc(100% + 8px); left: 0; font-size: 20px; }
   .title { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 7px 14px 7px 9px; text-align: left; pointer-events: auto; }
   .title .flag { width: 33px; }
   .title-text { min-width: 0; }
@@ -339,7 +342,10 @@
 
   <div class="hud">
     <div class="hud-left">
-      <button class="pill hud-home" id="homeBtn" title="홈 화면으로" aria-label="홈 화면으로"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.5 12 4.2l8.5 7.3M6.4 9.6V20h11.2V9.6M10 20v-5.4h4V20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="hud-corner">
+        <button class="pill hud-icon" id="homeBtn" title="홈 화면으로" aria-label="홈 화면으로"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.5 12 4.2l8.5 7.3M6.4 9.6V20h11.2V9.6M10 20v-5.4h4V20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="pill hud-icon hud-sound" id="sound" title="효과음 끄기">🔊</button>
+      </div>
       <button class="pill title" id="worldBtn" title="스테이지 선택"><span class="flag" id="worldFlag"></span><span class="title-text"><b id="world">집 안</b><small id="stageLabel"></small></span></button>
     </div>
     <div class="hud-right">
@@ -352,7 +358,6 @@
     <button id="zoomIn" title="확대">＋</button>
     <button id="zoomOut" title="축소">－</button>
     <button id="resetView" title="시점 초기화">⟲</button>
-    <button id="sound" title="효과음 끄기">🔊</button>
   </div>
 
   <div class="panel pill" id="panel" hidden>
