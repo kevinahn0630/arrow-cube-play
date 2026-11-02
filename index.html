@@ -221,11 +221,13 @@
     z-index: 10;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(180deg, #fde3da 0%, #f8eeec 55%, #ebe8f5 100%);
+    background:
+      radial-gradient(240px 240px at 6% 24%, #ffc9d68c, #ffc9d600 70%),
+      radial-gradient(300px 300px at 100% 55%, #cfc6f68c, #cfc6f600 70%),
+      radial-gradient(280px 240px at 28% 94%, #ffd9b88c, #ffd9b800 70%),
+      linear-gradient(180deg, #fbe2da 0%, #f6e9f0 45%, #e7e7f7 100%);
   }
   .home[hidden] { display: none; }
-  .home > .sky-hills { height: 18vh; }
-  .home-head, .home-body { position: relative; }
   .home-head { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 760px; margin: 0 auto; padding: max(14px, env(safe-area-inset-top)) 16px 4px; }
   .home-brand { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
   .home-cube { width: 31px; height: 38px; flex: none; }
@@ -242,10 +244,13 @@
   .continue-text { flex: 1; min-width: 0; }
   .continue b { display: block; font-size: 16px; }
   .continue small { display: block; font-size: 12px; color: #9a879d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .group-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 24px auto 10px; padding: 0 2px; }
-  .group-head b { font-size: 18px; color: #5a4862; }
-  .group-head .stars { margin-left: 6px; font-size: 14px; }
-  .group-head span.note { font-size: 12px; color: #9a879d; text-align: right; }
+  /* The worlds in chapters Ⅰ to Ⅳ, each a winding path of glowing orbs (game.js layoutOrbs). */
+  .chapter { display: flex; align-items: center; gap: 12px; margin: 28px auto 0; }
+  .chapter i { flex: 1; height: 1px; background: linear-gradient(90deg, #d9b7c400, #d9b7c4); }
+  .chapter i:last-child { background: linear-gradient(90deg, #d9b7c4, #d9b7c400); }
+  .chapter b { font-size: 16px; font-weight: 300; letter-spacing: 4px; white-space: nowrap; }
+  .chapter .stars { margin-left: 8px; font-size: 12px; letter-spacing: 1px; text-shadow: 0 0 8px #ffd58a; }
+  .chapter-note { margin: 6px auto 14px; text-align: center; font-size: 11px; letter-spacing: 1px; color: #a091a6; }
 
   /* The stage menu: a sheet with one world's stages, over the game or the home screen. */
   .overlay {
@@ -276,31 +281,21 @@
   .icon[hidden] { display: none; }
   .sheet-body { overflow: auto; padding: 14px 14px 20px; overscroll-behavior: contain; }
   .stars { color: #e3a21a; letter-spacing: 1px; }
-  .world-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 10px; }
-  .world-card {
-    display: grid;
-    grid-template-columns: 46px 1fr;
-    align-items: center;
-    column-gap: 10px;
-    width: 100%;
-    text-align: left;
-    padding: 12px 12px 10px;
-    border-radius: 18px;
-    color: #5a4862;
-    background: #ffffffb8;
-    border: 1px solid #ffffffe6;
-    box-shadow: 0 6px 16px #b48aa026;
-  }
-  .world-card .flag { width: 46px; }
-  .world-card.current { border-color: #e2786a; box-shadow: 0 0 0 2px #e2786a; }
-  .world-card.locked { opacity: 0.6; }
-  .wc-main { min-width: 0; }
-  .wc-name { display: block; font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .wc-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; margin-top: 10px; }
-  .wc-foot .stars { flex: none; font-size: 11px; letter-spacing: 0; }
-  .wc-bar { flex: 1; display: block; height: 5px; border-radius: 3px; background: #5a48621a; overflow: hidden; }
-  .wc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-  .wc-count { flex: none; font-size: 11px; color: #9a879d; }
+  .orb-path { position: relative; }
+  .orb-trail { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .orb-trail path { fill: none; stroke: #ffffff; stroke-width: 3; stroke-dasharray: 2 9; stroke-linecap: round; opacity: 0.9; }
+  .world-orb { position: absolute; width: 104px; padding: 0; border: 0; border-radius: 0; background: none; text-align: center; color: var(--ink); }
+  .world-orb:active { transform: scale(0.96); }
+  .orb-ball { display: block; position: relative; width: 84px; height: 84px; margin: 4px auto 0; border-radius: 50%; overflow: hidden; box-shadow: 0 0 24px #ffffffcc, 0 10px 20px #b48aa040; }
+  .orb-ball svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .orb-ring { position: absolute; left: 6px; top: 0; width: 92px; height: 92px; pointer-events: none; }
+  .orb-ring circle { fill: none; stroke: #ffffff; stroke-width: 3; }
+  .orb-ring .orb-done { stroke: #e2786a; stroke-linecap: round; }
+  .world-orb.current .orb-ball { box-shadow: 0 0 0 3px #e2786a, 0 0 28px #e2786acc; }
+  .world-orb.locked .orb-ball { filter: saturate(0.8); opacity: 0.85; }
+  .orb-name { display: block; margin-top: 6px; font-size: 13px; font-weight: 500; letter-spacing: 1px; white-space: nowrap; }
+  .orb-foot { display: block; margin-top: 1px; font-size: 10px; color: #a091a6; white-space: nowrap; }
+  .orb-foot .stars { font-size: 10px; letter-spacing: 0; }
   .sheet-head .flag { width: 36px; }
   .about { font-size: 13px; color: var(--muted); margin: 0 2px 14px; line-height: 1.5; }
   .tutorial-btn { display: block; width: 100%; margin: 0 0 12px; font-size: 15px; font-weight: 700; background: #fff; }
@@ -419,7 +414,6 @@
   </div>
 
   <div class="home" id="home" hidden>
-    <svg class="sky-hills" viewBox="0 0 375 172" preserveAspectRatio="none" aria-hidden="true"><path d="M0 22 C 70 -12 130 14 190 28 S 320 -8 375 10 V172 H0Z" fill="#f3ddd8"/><path d="M0 74 C 90 44 160 82 240 70 S 340 46 375 62 V172 H0Z" fill="#ebd0d6"/><path d="M0 134 C 80 114 200 150 375 122 V172 H0Z" fill="#ddd0e8"/></svg>
     <header class="home-head">
       <div class="home-brand"><svg class="home-cube" aria-hidden="true"><use href="#cubeLogo"/></svg><svg class="home-word" viewBox="-8 -8 1010.23 116" role="img" aria-label="Arrow Cube"><use href="#wordLogo"/></svg></div>
       <div class="pill home-stars" id="homeStars"></div>

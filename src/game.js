@@ -1576,6 +1576,7 @@ function showHome() {
   game.screen = 'home';
   renderHome();
   $('home').hidden = false;
+  layoutOrbs();
 }
 
 // Into the game: the home screen and the menu put away.
@@ -1599,41 +1600,73 @@ function renderHome() {
     back.onclick = play;
     body.append(back);
   }
+  // The groups as chapters Ⅰ to Ⅳ, each a winding path of worlds (laid out by layoutOrbs).
   for (const tier of [0, 1, 2, 3]) {
     const need = TIER_STARS[tier];
     const open = tierOpen(progress, tier);
-    const head = node('div', 'group-head');
-    const name = node('b', '', GROUPS[tier]);
+    const head = node('div', 'chapter');
+    const name = node('b', '', `${'ⅠⅡⅢⅣ'[tier]} · ${GROUPS[tier]}`);
     if (tier) name.append(node('span', 'stars', '★'.repeat(tier)));
     const note = !tier ? '기본 규칙 익히기' : !need ? '처음부터' : open ? `별 ${need}개 · 열림` : `🔒 별 ${need - total}개 더 · 개발 중에는 열려 있음`;
-    head.append(name, node('span', 'note', note));
-    const grid = node('div', 'world-grid');
-    for (const key of Object.keys(WORLDS)) if (WORLDS[key].tier === tier) grid.append(worldCard(key, !open));
-    body.append(head, grid);
+    head.append(node('i'), name, node('i'));
+    const path = node('div', 'orb-path');
+    for (const key of Object.keys(WORLDS)) if (WORLDS[key].tier === tier) path.append(worldOrb(key, !open));
+    body.append(head, node('p', 'chapter-note', note), path);
   }
   body.scrollTop = 0;
 }
 
-function worldCard(key, locked = false) {
+// A world as a glowing orb: a window onto the bottom of its picture (scenery.js) under
+// its sky, a ring that fills with the stages cleared, and its name and stars below.
+function worldOrb(key, locked = false) {
   const w = WORLDS[key];
   const n = w.stages.length;
   const done = clearedCount(progress, key);
-  const card = node('button', `world-card${game.playing && key === game.world ? ' current' : ''}${locked ? ' locked' : ''}`);
-  card.style.setProperty('--accent', themeOf(key).accent);
-  const main = node('span', 'wc-main');
-  main.append(node('span', 'wc-name', shortName(key)));
-  const foot = node('span', 'wc-foot');
-  const bar = node('span', 'wc-bar');
-  const fill = node('i');
-  fill.style.width = `${(100 * done) / n}%`;
-  bar.append(fill);
-  foot.append(bar);
-  if (w.tier) foot.append(node('span', 'stars', locked && !done ? '🔒' : starText(starsOf(progress, key))));
-  foot.append(node('span', 'wc-count', `${done} / ${n}`));
-  card.append(flagOf(key), main, foot);
-  card.setAttribute('aria-label', `${shortName(key)}, ${done}/${n} 클리어${w.tier ? `, 별 ${starsOf(progress, key)}개` : ''}${locked ? ', 잠김' : ''}`);
-  card.onclick = () => openMenu(key);
-  return card;
+  const orb = node('button', `world-orb${game.playing && key === game.world ? ' current' : ''}${locked ? ' locked' : ''}`);
+  const ball = node('span', 'orb-ball');
+  ball.style.background = themeOf(key).background;
+  ball.innerHTML = scenery(key, 375, 812).replace('viewBox="0 0 375 812"', 'viewBox="0 470 375 342" preserveAspectRatio="xMidYMax slice"');
+  orb.append(ball);
+  const arc = done ? `<circle class="orb-done" cx="50" cy="50" r="47" stroke-dasharray="${((295.3 * done) / n).toFixed(1)} 400" transform="rotate(-90 50 50)"/>` : '';
+  orb.insertAdjacentHTML('beforeend', `<svg class="orb-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="47"/>${arc}</svg>`);
+  const foot = node('span', 'orb-foot');
+  if (w.tier) foot.append(node('span', 'stars', locked && !done ? '🔒' : starText(starsOf(progress, key))), ' ');
+  foot.append(`${done}/${n}`);
+  orb.append(node('b', 'orb-name', shortName(key)), foot);
+  orb.setAttribute('aria-label', `${shortName(key)}, ${done}/${n} 클리어${w.tier ? `, 별 ${starsOf(progress, key)}개` : ''}${locked ? ', 잠김' : ''}`);
+  orb.onclick = () => openMenu(key);
+  return orb;
+}
+
+// Each chapter's orbs along a winding path: rows that snake left to right and back,
+// every other column a little lower, joined by a dotted line. It needs the screen's
+// width, so it runs once the home screen shows, and again on a resize.
+function layoutOrbs() {
+  for (const path of $('home').querySelectorAll('.orb-path')) {
+    const width = path.clientWidth;
+    if (!width) continue;
+    const orbs = [...path.querySelectorAll('.world-orb')];
+    const cols = Math.max(3, Math.min(6, Math.floor(width / 112)));
+    const cell = width / cols;
+    const at = orbs.map((orb, i) => {
+      const row = Math.floor(i / cols);
+      const col = row % 2 ? cols - 1 - (i % cols) : i % cols;
+      const x = (col + 0.5) * cell;
+      const y = row * 142 + (col % 2) * 36;
+      orb.style.left = `${x - 52}px`;
+      orb.style.top = `${y}px`;
+      return [x, y + 46];
+    });
+    path.style.height = `${Math.max(...at.map(([, y]) => y)) + 90}px`;
+    let trail = path.querySelector('.orb-trail');
+    if (!trail) {
+      trail = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      trail.setAttribute('class', 'orb-trail');
+      trail.setAttribute('aria-hidden', 'true');
+      path.prepend(trail);
+    }
+    trail.innerHTML = at.length > 1 ? `<path d="M${at.map(([x, y]) => `${Math.round(x)} ${Math.round(y)}`).join('L')}"/>` : '';
+  }
 }
 
 // World key's stage menu; from the generator, the home screen.
@@ -1830,6 +1863,7 @@ function resize() {
   camera.updateProjectionMatrix();
   controls.handleResize();
   showScenery();
+  if (!$('home').hidden) layoutOrbs();
   if (game.puz && Math.abs(thickness() - game.thick) > 0.01) {
     game.thick = thickness();
     redrawAll();

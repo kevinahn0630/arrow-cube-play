@@ -383,14 +383,55 @@ const rolling = (w, base, top, [far, near]) =>
 // Where a picture's ground starts, and how tall its hills may be.
 const groundLine = ({ h, band, ground: g }, k = 0.8) => ({ base: h - g * 0.4, top: band ? band * k : h * k * 0.2 });
 
+// ---------- each country's own sky and ground (2026-11-02, so no two look alike)
+
+// Red lanterns on cords from the top edge, gold caps and a tassel.
+const LANTERN_RED = '<ellipse rx="0.5" ry="0.42" fill="#e8786c"/><path d="M-0.5 0H0.5" stroke="#f4a99d" stroke-width="0.06"/><rect x="-0.26" y="-0.5" width="0.52" height="0.1" fill="#e9c46a"/><rect x="-0.26" y="0.4" width="0.52" height="0.1" fill="#e9c46a"/><path d="M0 0.5V0.85" stroke="#e9c46a" stroke-width="0.06"/>';
+const redLanterns = (w, sky) => [[0.12, 1.4, 1], [0.27, 0.9, 0.8], [0.73, 1.2, 0.9], [0.88, 0.7, 0.75]].map(([x, y, s]) => hang(w * x, sky.y * y + sky.r, sky.r * 0.9 * s, LANTERN_RED)).join('');
+// A Korean shield kite with its round hole and a long tail.
+const kite = (x, y, s) => `<path d="M${n(x + s * 0.4)} ${n(y + s * 0.6)}Q${n(x + s * 1.2)} ${n(y + s * 1.6)} ${n(x + s * 0.5)} ${n(y + s * 2.6)}" fill="none" stroke="#b9a7b4" stroke-width="1"/>` +
+  `<rect x="${n(x - s * 0.4)}" y="${n(y - s * 0.6)}" width="${n(s * 0.8)}" height="${n(s * 1.2)}" fill="#fbf6ef"/><rect x="${n(x - s * 0.4)}" y="${n(y - s * 0.6)}" width="${n(s * 0.8)}" height="${n(s * 0.22)}" fill="#e98a86"/><rect x="${n(x - s * 0.4)}" y="${n(y + s * 0.44)}" width="${n(s * 0.8)}" height="${n(s * 0.16)}" fill="#8fa8d8"/><circle cx="${n(x)}" cy="${n(y)}" r="${n(s * 0.2)}" fill="#f2d4cf"/>`;
+// A small sailing boat on the water at (x, y).
+const sailboat = (x, y, s) => `<path d="M${n(x - s * 0.5)} ${n(y)}H${n(x + s * 0.5)}L${n(x + s * 0.35)} ${n(y + s * 0.18)}H${n(x - s * 0.35)}Z" fill="#7a8fb0"/><path d="M${n(x)} ${n(y - s * 0.05)}V${n(y - s)}L${n(x + s * 0.42)} ${n(y - s * 0.12)}Z" fill="#ffffff"/><path d="M${n(x - s * 0.04)} ${n(y - s * 0.1)}V${n(y - s * 0.8)}L${n(x - s * 0.36)} ${n(y - s * 0.12)}Z" fill="#f4ede4"/>`;
+// Long soft rays round a sun.
+const rays = (x, y, r, fill) => Array.from({ length: 12 }, (_, i) => { const a = (i * Math.PI) / 6; return `<path d="M${n(x + Math.cos(a - 0.08) * r * 1.3)} ${n(y + Math.sin(a - 0.08) * r * 1.3)}L${n(x + Math.cos(a) * r * 2.2)} ${n(y + Math.sin(a) * r * 2.2)}L${n(x + Math.cos(a + 0.08) * r * 1.3)} ${n(y + Math.sin(a + 0.08) * r * 1.3)}Z" fill="${fill}" opacity="0.5"/>`; }).join('');
+// A kangaroo about s tall standing on (x, y), facing right.
+const kangaroo = (x, y, s, fill) => `<path transform="translate(${n(x)} ${n(y)}) scale(${u(s)})" d="M-0.55 0Q-0.2 -0.05 -0.05 -0.1Q0.05 -0.45 0.12 -0.62Q0.16 -0.78 0.2 -0.88L0.17 -1L0.24 -0.95L0.28 -1L0.3 -0.9Q0.4 -0.88 0.4 -0.82Q0.3 -0.8 0.26 -0.74Q0.34 -0.6 0.3 -0.45L0.4 -0.38L0.28 -0.36Q0.25 -0.2 0.2 -0.06L0.32 0H-0.05Q-0.3 -0.04 -0.55 0Z" fill="${fill}"/>`;
+// Rows of colour from y = top to the bottom edge (fields), each row deeper than the last.
+const fieldRows = (w, h, top, rows, between) => {
+  let y = top;
+  let out = '';
+  const weight = (i) => 1 + i * 0.4;
+  const total = rows.reduce((t, _, i) => t + weight(i), 0);
+  rows.forEach((fill, i) => {
+    const hh = ((h - top) * weight(i)) / total;
+    out += `<rect y="${n(y)}" width="${w}" height="${n(hh)}" fill="${between}"/><rect y="${n(y + hh * 0.22)}" width="${w}" height="${n(hh * 0.78)}" fill="${fill}"/>`;
+    y += hh;
+  });
+  return out;
+};
+// A gondola on the canal at (x, y), with its oarsman.
+const gondola = (x, y, s) => `<path d="M${n(x - s * 0.6)} ${n(y - s * 0.12)}Q${n(x)} ${n(y + s * 0.16)} ${n(x + s * 0.62)} ${n(y - s * 0.2)}L${n(x + s * 0.5)} ${n(y - s * 0.04)}Q${n(x)} ${n(y + s * 0.08)} ${n(x - s * 0.5)} ${n(y - s * 0.02)}Z" fill="#4a3f5c"/>` +
+  `<rect x="${n(x + s * 0.22)}" y="${n(y - s * 0.42)}" width="${n(s * 0.07)}" height="${n(s * 0.3)}" fill="#e98a86"/><circle cx="${n(x + s * 0.255)}" cy="${n(y - s * 0.47)}" r="${n(s * 0.05)}" fill="#4a3f5c"/><path d="M${n(x + s * 0.3)} ${n(y - s * 0.35)}L${n(x + s * 0.05)} ${n(y + s * 0.1)}" stroke="#a68e86" stroke-width="1.2"/>`;
+// Snow falling over the whole picture, or rain in fine slanting lines.
+const snowfall = (w, h, seed) => { const rand = random(seed); let d = ''; for (let i = 0; i < (w * h) / 5000; i++) d += `<circle cx="${n(rand() * w)}" cy="${n(rand() * h)}" r="${n(1 + rand() * 1.8)}"/>`; return `<g fill="#ffffff" opacity="0.85">${d}</g>`; };
+const rain = (w, h, seed) => { const rand = random(seed); let d = ''; for (let i = 0; i < (w * h) / 9000; i++) { const x = rand() * w, y = rand() * h * 0.8; d += `M${n(x)} ${n(y)}l-4 12`; } return `<path d="${d}" stroke="#8f9ab3" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round"/>`; };
+// Marigold garlands swagged across the top, under the HUD.
+const garlands = (w, sky) => [[0, 0.48, sky.y * 1.3], [0.52, 1, sky.y * 1.05]].map(([a, b, y]) => {
+  let out = '';
+  for (let t = 0; t <= 1; t += 0.06) { const x = w * (a + (b - a) * t); const yy = y + Math.sin(t * Math.PI) * sky.r * 1.6; out += `<circle cx="${n(x)}" cy="${n(yy)}" r="${n(sky.r * 0.28)}" fill="${t * 20 % 2 < 1 ? '#f6b04a' : '#f28c5b'}"/>`; }
+  return out;
+}).join('');
+// A round tree: an olive (silver-green) or a lime on the lawn.
+const roundTree = (x, base, s, [l, d], trunk = '#a68e86') => `<rect x="${n(x - s * 0.06)}" y="${n(base - s * 0.55)}" width="${n(s * 0.12)}" height="${n(s * 0.55)}" fill="${trunk}"/>` + dome(x, base - s * 0.45, s * 0.42, [l, d]);
 // ---------- 중국: misty karst peaks, a pagoda, and a moon gate in a white wall
 
 function china(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.95);
-  const pg = isoFit(4, base, big * 0.6, [-5, 5], 10);
-  const body = tone('#e6a597');
-  const tiles = tone('#7d7590');
+  const pg = isoFit(4, base, big * 0.62, [-5, 5], 10);
+  const body = tone('#e98f80');
+  const tiles = tone('#5f8f7a');
   let pagoda = pg.box([0, 0, 0], [5, 5, 0.6], tone('#e7ddd6'));
   let z = 0.6;
   for (let i = 0; i < 4; i++) {
@@ -400,91 +441,92 @@ function china(L) {
   }
   pagoda += pg.pyramid([1.9, 1.9, z], [3.1, 3.1], 1.6, [tiles[1], tiles[2]]);
   const gt = isoFit(w - 4 - big * 0.78, base, big * 0.78, [-5.4, 9.4], 14.8);
-  const wall = gt.box([0, 0, 0], [9, 5, 2.6], tone('#e3a596')) + gt.onLeft(5, '<path d="M3.6 0V1.3A0.9 0.9 0 0 1 5.4 1.3V0Z" fill="#8f6f78"/>') +
+  const gate = gt.box([0, 0, 0], [9, 5, 2.6], tone('#e08c7f')) + gt.onLeft(5, '<path d="M3.6 0V1.3A0.9 0.9 0 0 1 5.4 1.3V0Z" fill="#7a4f5a"/>') +
     gt.box([1, 1, 2.6], [8, 4, 4.2], body) + gt.roof([0.4, 0.4, 4.2], [8.6, 4.6], 1.9, 2.1, [tiles[1], tiles[2]]);
-  return (
-    calmSky(L) +
-    hills(base, [[0.08, 0.08, 0.9], [0.22, 0.1, 0.62], [0.6, 0.08, 0.78], [0.78, 0.11, 1], [0.95, 0.07, 0.6]].map(([x, hw, k]) => [x * w, hw * w, top * k]), '#dce9df') +
-    hills(base, [[0.34 * w, 0.3 * w, top * 0.32], [0.86 * w, 0.24 * w, top * 0.26]], '#c3dccb') +
-    pagoda + wall + floor(w, h, base, '#b6d4c0')
-  );
+  return disc(w / 2, sky.y + sky.r, sky.r * 1.2, '#f7b4a5') + redLanterns(w, sky) +
+    hills(base, [[0.08, 0.08, 0.95], [0.22, 0.1, 0.65], [0.6, 0.08, 0.8], [0.78, 0.11, 1.05], [0.95, 0.07, 0.6]].map(([x, hw, k]) => [x * w, hw * w, top * k]), '#cfe5d6') +
+    hills(base, [[0.34 * w, 0.3 * w, top * 0.32], [0.86 * w, 0.24 * w, top * 0.26]], '#a9d3bb') +
+    pagoda + gate + water(w, h, base, ['#b4dccb', '#8cc5ae'], 21);
 }
 
 // ---------- 한국: a palace pavilion on its terraces and a stone pagoda, celadon hills
 
 function korea(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.85);
   const stone = tone('#ddd2cd');
-  const red = tone('#c27b76');
   const p = isoFit(4, base, big, [-7, 11], 18);
   const pavilion = p.box([0, 0, 0], [11, 7, 1.3], stone) + p.box([1, 1, 1.3], [10, 6, 2.4], stone) +
-    [[1.6, 1.6], [1.6, 5], [9, 1.6], [9, 5]].map(([x, y]) => p.box([x, y, 2.4], [x + 0.55, y + 0.55, 5.4], red)).join('') +
-    p.box([1.2, 1.2, 5.3], [10, 6, 5.8], tone('#b1a4b6')) + p.roof([0.2, 0.2, 5.8], [11, 6.8], 2.6, 2.6, ['#6f6985', '#58526e']);
+    [[1.6, 1.6], [1.6, 5], [9, 1.6], [9, 5]].map(([x, y]) => p.box([x, y, 2.4], [x + 0.55, y + 0.55, 5.4], tone('#c9706c'))).join('') +
+    p.box([1.2, 1.2, 5.3], [10, 6, 5.8], tone('#7fb3a3')) + p.roof([0.2, 0.2, 5.8], [11, 6.8], 2.6, 2.6, ['#5d5872', '#4a465e']);
   const g = isoFit(w - 4 - big * 0.62, base, big * 0.62, [-6, 6], 12);
   const granite = tone('#dad1cd');
   const pagoda = [[0, 6, 0, 1.4], [1.1, 4.9, 1.4, 3.6], [0.3, 5.7, 3.6, 4.2], [1.5, 4.5, 4.2, 5.8], [0.8, 5.2, 5.8, 6.3], [1.9, 4.1, 6.3, 7.6], [1.3, 4.7, 7.6, 8.05], [2.7, 3.3, 8.05, 9.6]]
     .map(([a, b, z0, z1]) => g.box([a, a, z0], [b, b, z1], granite)).join('');
-  return calmSky(L) + rolling(w, base, top, ['#e2ece7', '#c9e2d8']) + pavilion + pagoda + floor(w, h, base, '#b4d5c8');
+  return disc(w - sky.x, sky.y, sky.r * 1.1, '#fffaf2') + kite(sky.x * 1.2, sky.y + sky.r * 1.5, sky.r * 1.4) + birds(w * 0.55, sky.y + sky.r * 4, sky.r * 1.3, '#9a8fa6') +
+    hills(base, [[0.1 * w, 0.3 * w, top * 0.75], [0.45 * w, 0.32 * w, top * 0.55], [0.85 * w, 0.32 * w, top * 0.8]], '#d3e8df') +
+    hills(base, [[0.3 * w, 0.4 * w, top * 0.4], [0.75 * w, 0.34 * w, top * 0.32]], '#aed6c6') + pavilion + pagoda + floor(w, h, base, '#94c6b2');
 }
 
 // ---------- 그리스: a temple of columns, white houses with a blue dome, a calm sea
 
 function greece(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base } = groundLine(L);
-  const marble = tone('#e9e0d6');
+  const marble = tone('#eee7de');
   const t = isoFit(4, base, big * 1.05, [-7, 12], 19);
   const cols = [...[1, 3, 5, 7, 9, 10.8].map((x) => [x, 5.8]), [10.8, 1], [10.8, 2.9], [10.8, 4.1]].sort((a, b) => a[0] + a[1] - b[0] - b[1]);
   const temple = t.box([0, 0, 0], [12, 7, 0.9], marble) + t.box([0.5, 0.5, 0.9], [11.5, 6.5, 1.6], marble) +
-    cols.map(([x, y]) => t.box([x, y, 1.6], [x + 0.7, y + 0.7, 6.4], tone('#f1eae2'))).join('') +
+    cols.map(([x, y]) => t.box([x, y, 1.6], [x + 0.7, y + 0.7, 6.4], tone('#f6f1ea'))).join('') +
     t.box([0.5, 0.5, 6.4], [11.5, 6.5, 7.2], marble) + t.roof([0.5, 0.5, 7.2], [11.5, 6.5], 1.9, 0, ['#e6c1ab', marble[2]]);
   const s = isoFit(w - 4 - big * 0.6, base, big * 0.6, [-3.5, 6], 9.5);
-  const white = tone('#f0ece7');
+  const white = tone('#f6f3ef');
   const [dx, dy] = s.pt(1.5, 1.8, 4.4);
   const houses = s.box([0, 0, 0], [3, 3.5, 3.2], white) + s.box([3, 0.6, 0], [6, 3.5, 2.2], white) +
-    s.onLeft(3.5, '<rect x="0.7" y="0" width="0.8" height="1.5" rx="0.4" fill="#8eb4de"/><rect x="3.8" y="0.9" width="0.6" height="0.6" fill="#8eb4de"/>') +
-    s.box([0.5, 0.8, 3.2], [2.5, 2.8, 4.4], white) + dome(dx, dy + s.k * 0.4, s.k * 1.15, ['#91b7df', '#7199c6']);
-  return calmSky(L, '#fffaf0') + temple + houses + water(w, h, base, ['#c6e0f0', '#9fc8e2'], 3);
+    s.onLeft(3.5, '<rect x="0.7" y="0" width="0.8" height="1.5" rx="0.4" fill="#5f8fd0"/><rect x="3.8" y="0.9" width="0.6" height="0.6" fill="#5f8fd0"/>') +
+    s.box([0.5, 0.8, 3.2], [2.5, 2.8, 4.4], white) + dome(dx, dy + s.k * 0.4, s.k * 1.15, ['#6f9ee0', '#4f7fc4']);
+  const sea = base + (h - base) * 0.05;
+  return disc(sky.x, sky.y, sky.r, '#ffffff') + birds(w * 0.62, sky.y + sky.r * 1.5, sky.r * 1.6, '#ffffff') + birds(w * 0.3, sky.y + sky.r * 4, sky.r * 1.2, '#ffffff') +
+    temple + houses + water(w, h, sea, ['#8fc3e8', '#5f9fd6'], 3) + sailboat(w * 0.5, sea + (h - sea) * 0.45, big * 0.22);
 }
 
 // ---------- 이집트: the pyramids and an obelisk on soft dunes
 
 function egypt(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.55);
   const py = isoFit(4, base, big * 1.5, [-12, 23], 24);
-  const pyramids = py.pyramid([9, -7, 0], [16, 0], 6, ['#f4d6a8', '#dcae7a']) + py.pyramid([0, 0, 0], [12, 12], 10, ['#f7d9aa', '#ddaa72']);
+  const pyramids = py.pyramid([9, -7, 0], [16, 0], 6, ['#f6d39a', '#dca46a']) + py.pyramid([0, 0, 0], [12, 12], 10, ['#f8d79f', '#dfa767']);
   const ob = isoFit(w - 4 - big * 0.37, base, big * 0.37, [-4, 4], 8);
-  const sand = tone('#e6c290');
+  const sand = tone('#e8bf86');
   const obelisk = ob.box([0, 0, 0], [4, 4, 1.1], sand) + ob.box([1.2, 1.2, 1.1], [2.8, 2.8, 14], sand) + ob.pyramid([1.2, 1.2, 14], [2.8, 2.8], 1.7, ['#f7d66e', '#d9a93c']);
-  return calmSky(L, '#fff5e4', true, '#b49d86') +
-    hills(base, [[0.18 * w, 0.4 * w, top * 0.7], [0.62 * w, 0.42 * w, top * 0.5], [1.02 * w, 0.3 * w, top * 0.8]], '#f9e7cb') +
-    pyramids + obelisk + floor(w, h, base, '#efd09e');
+  const sx = w - sky.x;
+  return rays(sx, sky.y + sky.r, sky.r * 1.4, '#ffd27a') + disc(sx, sky.y + sky.r, sky.r * 1.4, '#ffd98a') +
+    hills(base, [[0.18 * w, 0.4 * w, top * 0.7], [0.62 * w, 0.42 * w, top * 0.5], [1.02 * w, 0.3 * w, top * 0.8]], '#f8e0b8') +
+    pyramids + obelisk + put(w * 0.55, base + 2, big * 0.42, PALM) + floor(w, h, base, '#f0cd94');
 }
 
 // ---------- 미국: red buttes and a mesa in the desert, a saguaro
 
 function usa(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.5);
-  const rock = tone('#df9677');
+  const rock = tone('#d9805f');
   const b = isoFit(4, base, big * 0.95, [-6, 10], 16);
   const buttes = b.box([0, 0, 0], [10, 6, 1.6], rock) + b.box([1.5, 1.2, 1.6], [6.5, 4.8, 9], rock) + b.box([7.4, 1.8, 1.6], [8.6, 3, 6.4], rock);
   const m = isoFit(w - 4 - big * 0.62, base, big * 0.62, [-4, 7], 11);
-  const mesa = m.box([0, 0, 0], [7, 4, 3.2], tone('#e6a588'));
+  const mesa = m.box([0, 0, 0], [7, 4, 3.2], tone('#e0906f'));
   const cx = w - big * 0.78;
-  const s = big * 0.3;
-  const cactus = `<g fill="#8fb59a"><rect x="${n(cx - s * 0.08)}" y="${n(base - s)}" width="${n(s * 0.16)}" height="${n(s)}" rx="${n(s * 0.08)}"/>` +
-    `<path d="M${n(cx - s * 0.08)} ${n(base - s * 0.45)}H${n(cx - s * 0.26)}V${n(base - s * 0.75)}" fill="none" stroke="#8fb59a" stroke-width="${n(s * 0.12)}" stroke-linecap="round" stroke-linejoin="round"/>` +
-    `<path d="M${n(cx + s * 0.08)} ${n(base - s * 0.55)}H${n(cx + s * 0.24)}V${n(base - s * 0.85)}" fill="none" stroke="#7fa68b" stroke-width="${n(s * 0.12)}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
-  return calmSky(L, '#fff4ea', false) + rolling(w, base, top, ['#f6dccb', '#f0cdb6']) + buttes + mesa + cactus + floor(w, h, base, '#f0c8a9');
+  const s = big * 0.34;
+  const cactus = `<g fill="none" stroke="#6f9f80" stroke-width="${n(s * 0.13)}" stroke-linecap="round" stroke-linejoin="round"><path d="M${n(cx)} ${n(base)}V${n(base - s)}"/><path d="M${n(cx)} ${n(base - s * 0.45)}H${n(cx - s * 0.2)}V${n(base - s * 0.75)}"/><path d="M${n(cx)} ${n(base - s * 0.55)}H${n(cx + s * 0.2)}V${n(base - s * 0.85)}"/></g>`;
+  return disc(w / 2, base - top * 0.35, sky.r * 2.1, '#ffb98f') + birds(sky.x * 1.4, sky.y + sky.r * 2, sky.r * 1.6, '#a77a78') +
+    hills(base, [[0.2 * w, 0.4 * w, top * 0.3], [0.8 * w, 0.4 * w, top * 0.25]], '#efb79a') + buttes + mesa + cactus + floor(w, h, base, '#e6a585');
 }
 
 // ---------- 호주: the opera house's sails on the harbour, Uluru far off
 
 function australia(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base } = groundLine(L);
   const harbour = base + (h - base) * 0.35;
   const p = isoFit(4, harbour, big * 1.05, [-5, 12], 17);
@@ -497,57 +539,60 @@ function australia(L) {
   }
   const ux = w - big * 1.0;
   const uw = big * 0.95;
-  const ut = base - big * 0.24;
-  const uluru = `<path d="M${n(ux)} ${n(base)}C${n(ux + uw * 0.02)} ${n(ut)} ${n(ux + uw * 0.2)} ${n(ut)} ${n(ux + uw * 0.5)} ${n(ut)}S${n(ux + uw)} ${n(ut + big * 0.02)} ${n(ux + uw)} ${n(base)}Z" fill="#d98b6c"/>` +
-    `<path d="M${n(ux + uw * 0.08)} ${n(ut + big * 0.05)}C${n(ux + uw * 0.2)} ${n(ut)} ${n(ux + uw * 0.6)} ${n(ut)} ${n(ux + uw * 0.85)} ${n(ut + big * 0.04)}" fill="none" stroke="#eaa98b" stroke-width="${n(big * 0.03)}" stroke-linecap="round"/>`;
-  return calmSky(L, '#fff4e8') + uluru + floor(w, h, base, '#f0cdb2') + water(w, h, harbour, ['#c5e2ec', '#a3cfe0'], 4) + house;
+  const ut = base - big * 0.26;
+  const uluru = `<path d="M${n(ux)} ${n(base)}C${n(ux + uw * 0.02)} ${n(ut)} ${n(ux + uw * 0.2)} ${n(ut)} ${n(ux + uw * 0.5)} ${n(ut)}S${n(ux + uw)} ${n(ut + big * 0.02)} ${n(ux + uw)} ${n(base)}Z" fill="#d07a58"/>` +
+    `<path d="M${n(ux + uw * 0.08)} ${n(ut + big * 0.05)}C${n(ux + uw * 0.2)} ${n(ut)} ${n(ux + uw * 0.6)} ${n(ut)} ${n(ux + uw * 0.85)} ${n(ut + big * 0.04)}" fill="none" stroke="#e8a283" stroke-width="${n(big * 0.03)}" stroke-linecap="round"/>`;
+  return disc(w - sky.x, sky.y, sky.r, '#fffbe8') + birds(sky.x * 1.4, sky.y + sky.r * 2.5, sky.r * 1.5, '#7f8fa6') +
+    uluru + floor(w, h, base, '#e3a07c') + kangaroo(w - big * 0.25, base + (harbour - base) * 0.6, big * 0.3, '#a8604a') + water(w, h, harbour, ['#9fd0e6', '#78b8d8'], 4) + house;
 }
 
 // ---------- 프랑스: a glass pyramid and the iron tower, lavender morning
 
 function france(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.5);
   const g = isoFit(4, base, big * 0.85, [-8, 8], 16);
   let glass = g.box([-0.6, -0.6, 0], [8.6, 8.6, 0.25], tone('#e6e1ea')) + g.pyramid([0, 0, 0.25], [8, 8], 5.6, ['#dbe7f3', '#bccfe3']);
   const [ax, ay] = g.pt(4, 4, 5.85);
-  glass += [0.25, 0.5, 0.75].map((t) => { const [lx, ly] = g.pt(t * 8, 8, 0.25); const [rx, ry] = g.pt(8, 8 - t * 8, 0.25); return `M${n(ax)} ${n(ay)}L${n(lx)} ${n(ly)}M${n(ax)} ${n(ay)}L${n(rx)} ${n(ry)}`; })
-    .reduce((d, s) => d + s, '').replace(/^/, '<path d="') + '" stroke="#ffffff" stroke-opacity="0.6" stroke-width="1"/>';
+  glass += '<path d="' + [0.25, 0.5, 0.75].map((t) => { const [lx, ly] = g.pt(t * 8, 8, 0.25); const [rx, ry] = g.pt(8, 8 - t * 8, 0.25); return `M${n(ax)} ${n(ay)}L${n(lx)} ${n(ly)}M${n(ax)} ${n(ay)}L${n(rx)} ${n(ry)}`; }).join('') + '" stroke="#ffffff" stroke-opacity="0.6" stroke-width="1"/>';
   const s = big * 1.15;
   const x = w - big * 0.32;
   const edge = [[-0.5, 0], [-0.3, -0.27], [-0.17, -0.45], [-0.1, -0.62], [-0.06, -0.8], [-0.015, -1]];
   const side = (sgn) => `M${n(x)} ${n(base)}` + edge.map(([dx, dy]) => `L${n(x + sgn * dx * s * 0.38)} ${n(base + dy * s)}`).join('') + `L${n(x)} ${n(base - s)}Z`;
-  const tower = `<path d="${side(1)}" fill="#b0a2c0"/><path d="${side(-1)}" fill="#9283a6"/>` +
-    `<path d="M${n(x - s * 0.085)} ${n(base)}A${n(s * 0.085)} ${n(s * 0.11)} 0 0 1 ${n(x + s * 0.085)} ${n(base)}Z" fill="#e9e2ec"/>` +
-    [0.27, 0.62].map((t, i) => `<rect x="${n(x - s * (i ? 0.05 : 0.13))}" y="${n(base - s * t - 2)}" width="${n(s * (i ? 0.1 : 0.26))}" height="${n(Math.max(2.5, s * 0.02))}" fill="#e9e2ec"/>`).join('');
-  return calmSky(L, '#fff8f2', false) + rolling(w, base, top, ['#ece6f1', '#e0d8ea']) + glass + tower + floor(w, h, base, '#e7e0ea');
+  const tower = `<path d="${side(1)}" fill="#a596ba"/><path d="${side(-1)}" fill="#86779c"/>` +
+    `<path d="M${n(x - s * 0.085)} ${n(base)}A${n(s * 0.085)} ${n(s * 0.11)} 0 0 1 ${n(x + s * 0.085)} ${n(base)}Z" fill="#c9b5e2"/>` +
+    [0.27, 0.62].map((t, i) => `<rect x="${n(x - s * (i ? 0.05 : 0.13))}" y="${n(base - s * t - 2)}" width="${n(s * (i ? 0.1 : 0.26))}" height="${n(Math.max(2.5, s * 0.02))}" fill="#efe8f4"/>`).join('');
+  return disc(sky.x, sky.y, sky.r, '#fff6fb') + pill(w - sky.x - sky.r * 3, sky.y + sky.r * 0.6, sky.r * 3.6) + birds(w * 0.4, sky.y + sky.r * 3.5, sky.r * 1.3, '#8f86a8') +
+    hills(base, [[0.3 * w, 0.45 * w, top * 0.3], [0.85 * w, 0.4 * w, top * 0.26]], '#e2d8ee') + glass + tower +
+    fieldRows(w, h, base, ['#b9a3dc', '#a88fd3', '#9a7fcc', '#8c70c4'], '#9cc29a');
 }
 
 // ---------- 이탈리아: houses along a canal and a bell tower
 
 function italy(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base } = groundLine(L);
   const c = isoFit(4, base, big * 1.0, [-4, 10], 14);
-  const win = (x0, n0, z0) => Array.from({ length: n0 }, (_, i) => `<rect x="${x0 + i * 0.9}" y="${z0}" width="0.45" height="0.8" rx="0.22" fill="#a08b93"/>`).join('');
-  const houses = c.box([0, 0, 0], [3, 4, 5.4], tone('#ebc39c')) + c.onLeft(4, win(0.5, 3, 3.6) + win(0.5, 3, 1.8)) +
-    c.box([3, 0, 0], [6, 4, 4.4], tone('#e8a99c')) + c.onLeft(4, win(3.5, 3, 2.6)) +
-    c.box([6, 0, 0], [10, 4, 6.2], tone('#e3cba4')) + c.onLeft(4, win(6.6, 4, 4.4) + win(6.6, 4, 2.4));
+  const win = (x0, n0, z0) => Array.from({ length: n0 }, (_, i) => `<rect x="${x0 + i * 0.9}" y="${z0}" width="0.45" height="0.8" rx="0.22" fill="#8f7a86"/>`).join('');
+  const houses = c.box([0, 0, 0], [3, 4, 5.4], tone('#f0b77e')) + c.onLeft(4, win(0.5, 3, 3.6) + win(0.5, 3, 1.8)) +
+    c.box([3, 0, 0], [6, 4, 4.4], tone('#ec9c8a')) + c.onLeft(4, win(3.5, 3, 2.6)) +
+    c.box([6, 0, 0], [10, 4, 6.2], tone('#f3cf8f')) + c.onLeft(4, win(6.6, 4, 4.4) + win(6.6, 4, 2.4));
   const t = isoFit(w - 4 - big * 0.3, base, big * 0.3, [-2.6, 2.6], 5.2);
-  const tower = t.box([0, 0, 0], [2.4, 2.4, 11], tone('#e6a493')) + t.box([-0.1, -0.1, 11], [2.5, 2.5, 12.6], tone('#efe2d4')) +
-    t.onLeft(2.5, '<rect x="0.4" y="0.3" width="0.6" height="1" rx="0.3" fill="#a08b93"/><rect x="1.4" y="0.3" width="0.6" height="1" rx="0.3" fill="#a08b93"/>') +
-    t.pyramid([-0.1, -0.1, 12.6], [2.5, 2.5], 2.8, ['#8fb0a6', '#759a90']);
-  return calmSky(L) + houses + tower + water(w, h, base, ['#c2e2e4', '#9fcdd3'], 10);
+  const tower = t.box([0, 0, 0], [2.4, 2.4, 11], tone('#e2917c')) + t.box([-0.1, -0.1, 11], [2.5, 2.5, 12.6], tone('#f3e6d6')) +
+    t.onLeft(2.5, '<rect x="0.4" y="0.3" width="0.6" height="1" rx="0.3" fill="#8f7a86"/><rect x="1.4" y="0.3" width="0.6" height="1" rx="0.3" fill="#8f7a86"/>') +
+    t.pyramid([-0.1, -0.1, 12.6], [2.5, 2.5], 2.8, ['#86b4a6', '#6c9a8d']);
+  return disc(w - sky.x, sky.y, sky.r, '#fff3d6') + birds(sky.x * 1.3, sky.y + sky.r * 2, sky.r * 1.5, '#ffffff') +
+    houses + tower + water(w, h, base, ['#9fd6d6', '#74bfc4'], 10) + gondola(w * 0.52, base + (h - base) * 0.5, big * 0.42);
 }
 
 // ---------- 러시아: onion domes on brick towers, snowy pines
 
 function russia(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.6);
-  const brick = tone('#e5a59e');
+  const brick = tone('#d9817a');
   let church = '';
-  for (const [x, ht, r, d] of [[0.16, 0.5, 0.075, ['#9ad0c2', '#78b3a5']], [0.58, 0.46, 0.07, ['#f2cf8a', '#ddb06a']], [0.38, 0.78, 0.095, ['#c7b2e0', '#a991cb']]]) {
+  for (const [x, ht, r, d] of [[0.16, 0.5, 0.075, ['#7fcab4', '#5eae98']], [0.58, 0.46, 0.07, ['#f4c76a', '#dba948']], [0.38, 0.78, 0.095, ['#e98aa8', '#cc6e8c']]]) {
     const cx = big * x;
     const R = big * r;
     church += drum(cx, base, R, big * ht, brick) + onion(cx, base - big * ht + R * 0.2, R * 1.25, d) + `<path d="M${n(cx)} ${n(base - big * ht - R * 2)}v${n(-R * 0.6)}" stroke="#d9b36a" stroke-width="1.5"/>`;
@@ -555,25 +600,28 @@ function russia(L) {
   let pines = '';
   for (const [x, s] of [[0.9, 0.5], [0.76, 0.38], [0.98, 0.32], [0.66, 0.26]]) {
     const px = w - big + big * x - big * 0.1;
-    pines += cone(px, base, big * s * 0.32, big * s, ['#a9c1bd', '#8ea8a5']) + cone(px, base - big * s * 0.55, big * s * 0.14, big * s * 0.45, ['#ffffff', '#e6edf2']);
+    pines += cone(px, base, big * s * 0.32, big * s, ['#6f9a9a', '#557f80']) + cone(px, base - big * s * 0.55, big * s * 0.14, big * s * 0.45, ['#ffffff', '#e6edf2']);
   }
-  return calmSky(L, '#fff9f2', true, '#a7a3bd') + rolling(w, base, top, ['#ebedf6', '#e2e6f1']) + church + pines + floor(w, h, base, '#eef1f7');
+  return disc(w - sky.x, sky.y, sky.r, '#f4f6ff') + rolling(w, base, top, ['#e3e8f6', '#d7def0']) + church + pines + floor(w, h, base, '#f3f6fb') + snowfall(w, h, 29);
 }
 
 // ---------- 스페인: an aqueduct of arches and white houses with terracotta roofs
 
 function spain(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.5);
   const a = isoFit(4, base, big * 1.1, [-1.8, 12.4], 13.8);
-  const arches = Array.from({ length: 5 }, (_, i) => { const x = 0.55 + i * 2.3; return `<path d="M${x} 0V2.4A0.75 0.75 0 0 0 ${x + 1.5} 2.4V0Z" fill="#f6e7da"/>`; }).join('');
-  const aqueduct = a.box([0, 0, 0], [12, 1.4, 4.4], tone('#e7c3a1')) + a.onLeft(1.4, arches) + a.box([-0.2, -0.2, 4.4], [12.2, 1.6, 4.8], tone('#efd3b5'));
+  const arches = Array.from({ length: 5 }, (_, i) => { const x = 0.55 + i * 2.3; return `<path d="M${x} 0V2.4A0.75 0.75 0 0 0 ${x + 1.5} 2.4V0Z" fill="#fde2c8"/>`; }).join('');
+  const aqueduct = a.box([0, 0, 0], [12, 1.4, 4.4], tone('#e3b088')) + a.onLeft(1.4, arches) + a.box([-0.2, -0.2, 4.4], [12.2, 1.6, 4.8], tone('#ecc59f'));
   const s = isoFit(w - 4 - big * 0.62, base, big * 0.62, [-3, 6.2], 9.2);
-  const white = tone('#f3efe9');
-  const roofs = ['#e3a58b', '#c98c75'];
-  const houses = s.box([0, 0, 0], [4, 3, 2.6], white) + s.roof([-0.2, -0.2, 2.6], [4.2, 3.2], 1.2, 0.9, roofs) + s.onLeft(3, '<rect x="1.6" y="0" width="0.8" height="1.4" rx="0.4" fill="#c9a07f"/>') +
+  const white = tone('#f7f3ec');
+  const roofs = ['#e88b62', '#c96f4c'];
+  const houses = s.box([0, 0, 0], [4, 3, 2.6], white) + s.roof([-0.2, -0.2, 2.6], [4.2, 3.2], 1.2, 0.9, roofs) + s.onLeft(3, '<rect x="1.6" y="0" width="0.8" height="1.4" rx="0.4" fill="#5f8fd0"/>') +
     s.box([4, 0.6, 0], [6, 3, 2], white) + s.roof([3.9, 0.4, 2], [6.2, 3.2], 0.9, 0.6, roofs);
-  return calmSky(L) + rolling(w, base, top, ['#f6e2cf', '#f0d4bd']) + aqueduct + houses + floor(w, h, base, '#efd8bf');
+  let olives = '';
+  for (const x of [0.42, 0.56, 0.7]) olives += roundTree(w * x, base + (h - base) * 0.45, big * 0.2, ['#b3c29a', '#98a982']);
+  return disc(w - sky.x, sky.y + sky.r * 0.6, sky.r * 1.5, '#ffcf9a') + birds(sky.x * 1.4, sky.y + sky.r * 2.6, sky.r * 1.5, '#b37a6a') +
+    hills(base, [[0.25 * w, 0.4 * w, top * 0.35], [0.8 * w, 0.36 * w, top * 0.3]], '#f1c7a2') + aqueduct + houses + floor(w, h, base, '#e9b58b') + olives;
 }
 
 // ---------- 멕시코: a stepped pyramid with a temple, agaves, papel picado overhead
@@ -614,35 +662,39 @@ function brazil(L) {
 // ---------- 영국: the clock tower, a red phone box and a round tree on the lawn
 
 function uk(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.5);
   const t = isoFit(4 + big * 0.06, base, big * 0.34, [-2.4, 2.4], 4.8);
-  const clock = '<circle cx="1.2" cy="10" r="0.72" fill="#fbf6ec" stroke="#c9a96e" stroke-width="0.1"/><path d="M1.2 10v0.45M1.2 10h0.35" stroke="#6f6985" stroke-width="0.08"/>';
-  const tower = t.box([0, 0, 0], [2.4, 2.4, 9], tone('#e2c9a6')) + t.box([-0.15, -0.15, 9], [2.55, 2.55, 11], tone('#ecd9bb')) +
-    t.onLeft(2.55, clock) + t.onRight(2.55, clock) + t.box([0.25, 0.25, 11], [2.15, 2.15, 12.2], tone('#e2c9a6')) +
-    t.pyramid([0.25, 0.25, 12.2], [2.15, 2.15], 3, ['#77819b', '#626c86']);
+  const clock = '<circle cx="1.2" cy="10" r="0.72" fill="#fbf6ec" stroke="#c9a96e" stroke-width="0.1"/><path d="M1.2 10v0.45M1.2 10h0.35" stroke="#4a3f5c" stroke-width="0.08"/>';
+  const tower = t.box([0, 0, 0], [2.4, 2.4, 9], tone('#d9bf98')) + t.box([-0.15, -0.15, 9], [2.55, 2.55, 11], tone('#e8d5b5')) +
+    t.onLeft(2.55, clock) + t.onRight(2.55, clock) + t.box([0.25, 0.25, 11], [2.15, 2.15, 12.2], tone('#d9bf98')) +
+    t.pyramid([0.25, 0.25, 12.2], [2.15, 2.15], 3, ['#6f7a94', '#5b6680']);
   const b = isoFit(w - 4 - big * 0.2, base, big * 0.2, [-1.3, 1.3], 2.6);
-  const box = b.box([0, 0, 0], [1.3, 1.3, 3.1], tone('#e27f7a')) + b.onLeft(1.3, '<rect x="0.25" y="0.8" width="0.8" height="1.6" fill="#f6dcd6" opacity="0.8"/>') +
-    b.box([-0.05, -0.05, 3.1], [1.35, 1.35, 3.35], tone('#e27f7a'));
-  const tx = w - big * 0.62;
-  const tree = `<rect x="${n(tx - big * 0.02)}" y="${n(base - big * 0.22)}" width="${n(big * 0.04)}" height="${n(big * 0.22)}" fill="#a68e86"/>` + dome(tx, base - big * 0.18, big * 0.16, ['#b3cfa9', '#97b98f']);
-  return calmSky(L, '#fbf7f2', true, '#9fa4b8') + rolling(w, base, top, ['#e9ece4', '#dce5d6']) + tower + tree + box + floor(w, h, base, '#d7e3cf');
+  const box = b.box([0, 0, 0], [1.3, 1.3, 3.1], tone('#e2665e')) + b.onLeft(1.3, '<rect x="0.25" y="0.8" width="0.8" height="1.6" fill="#f6dcd6" opacity="0.8"/>') + b.box([-0.05, -0.05, 3.1], [1.35, 1.35, 3.35], tone('#e2665e'));
+  const bus = isoFit(w * 0.4, base + (h - base) * 0.55, big * 0.5, [-1.6, 6], 7.6);
+  const red = tone('#e2665e');
+  const decker = bus.box([0, 0, 0.3], [6, 1.6, 2.2], red) + bus.box([0, 0, 2.3], [6, 1.6, 4], red) + bus.onLeft(1.6, '<rect x="0.5" y="1.2" width="4.8" height="0.6" fill="#f6e6e0"/><rect x="0.5" y="2.9" width="5" height="0.6" fill="#f6e6e0"/>');
+  return pill(sky.x * 0.3, sky.y + sky.r * 0.4, sky.r * 4.6, 0.9) + pill(w - sky.x * 0.3 - sky.r * 4, sky.y + sky.r * 1.4, sky.r * 4, 0.85) + pill(w * 0.35, sky.y + sky.r * 3.6, sky.r * 3, 0.7) + rain(w, h, 33) +
+    rolling(w, base, top, ['#dfe6dc', '#cfdcc9']) + tower + roundTree(w - big * 0.62, base, big * 0.42, ['#a9c79e', '#8db384']) + box + floor(w, h, base, '#c4d8bb') + decker;
 }
 
 // ---------- 독일: the city gate of columns and a piece of the old wall in soft colours
 
 function germany(L) {
-  const { w, h, big } = L;
-  const { base, top } = groundLine(L, 0.5);
+  const { w, h, big, sky } = L;
+  const { base, top } = groundLine(L, 0.6);
   const g = isoFit(4, base, big * 1.05, [-3, 12], 15);
   const sand = tone('#e7d6bd');
   let gate = g.box([0, 0, 0], [12, 3, 0.6], sand);
   for (const y of [0.3, 2.1]) for (const x of [0.6, 2.6, 4.6, 6.6, 8.6, 10.6]) gate += g.box([x, y, 0.6], [x + 0.8, y + 0.6, 5], tone('#efe1cc'));
-  gate += g.box([0, 0, 5], [12, 3, 6], sand) + g.box([2, 0.5, 6], [10, 2.5, 7], sand) + g.box([5.2, 1, 7], [6.8, 2, 8], tone('#8fa8a3'));
+  gate += g.box([0, 0, 5], [12, 3, 6], sand) + g.box([2, 0.5, 6], [10, 2.5, 7], sand) + g.box([5.2, 1, 7], [6.8, 2, 8], tone('#7fa89f'));
   const s = isoFit(w - 4 - big * 0.66, base, big * 0.66, [-1, 8], 9);
-  const stripes = ['#f2b6b0', '#f6d48b', '#a8d8c8', '#c9b6e2'].map((c, i) => `<rect x="${0.6 + i * 1.9}" y="0.6" width="1.4" height="${1.2 + (i % 2) * 0.9}" rx="0.3" fill="${c}" opacity="0.85"/>`).join('');
-  const wall = s.box([0, 0, 0], [8, 1, 3.6], tone('#d3d4da')) + s.onLeft(1, stripes + [2, 4, 6].map((x) => `<path d="M${x} 0V3.6" stroke="#b9bac3" stroke-width="0.06"/>`).join(''));
-  return calmSky(L, '#fbf8f3') + rolling(w, base, top, ['#e8ebe6', '#dde3db']) + gate + wall + floor(w, h, base, '#dfe4dc');
+  const stripes = ['#f2a8a0', '#f6cf6f', '#8fd0bd', '#c3a8e6'].map((c, i) => `<rect x="${0.6 + i * 1.9}" y="0.6" width="1.4" height="${1.2 + (i % 2) * 0.9}" rx="0.3" fill="${c}"/>`).join('');
+  const wall = s.box([0, 0, 0], [8, 1, 3.6], tone('#cfd1d7')) + s.onLeft(1, stripes + [2, 4, 6].map((x) => `<path d="M${x} 0V3.6" stroke="#b6b8c1" stroke-width="0.06"/>`).join(''));
+  let forest = '';
+  for (const [x, k] of [[0.06, 0.9], [0.14, 1.1], [0.22, 0.8], [0.8, 1], [0.9, 1.2], [0.97, 0.85]]) forest += cone(w * x, base - top * 0.15, top * 0.14 * k, top * 0.5 * k, ['#6f9a86', '#5a8571']);
+  return disc(w - sky.x, sky.y, sky.r, '#fffaf0') + pill(sky.x * 0.4, sky.y + sky.r * 0.6, sky.r * 4) + birds(w * 0.5, sky.y + sky.r * 3.6, sky.r * 1.3, '#8f9aa8') +
+    hills(base, [[0.2 * w, 0.42 * w, top * 0.35], [0.8 * w, 0.4 * w, top * 0.3]], '#cfe2cf') + forest + gate + wall + floor(w, h, base, '#b9d4b6');
 }
 
 // ---------- 튀르키예: a domed mosque and minarets, balloons over the fairy chimneys
@@ -670,21 +722,23 @@ function turkiye(L) {
 // ---------- 인도: the white mausoleum with its dome and four minarets, cypresses
 
 function india(L) {
-  const { w, h, big } = L;
+  const { w, h, big, sky } = L;
   const { base, top } = groundLine(L, 0.5);
   const t = isoFit(4, base, big * 1.0, [-8, 8], 16);
-  const marble = tone('#f1e9e3');
-  const minaret = (x, y) => { const [mx, my] = t.pt(x, y, 1); return drum(mx, my, t.k * 0.3, t.k * 5, marble) + dome(mx, my - t.k * 5, t.k * 0.38, ['#fbf7f2', '#e3dad3']); };
+  const marble = tone('#f3ece6');
+  const minaret = (x, y) => { const [mx, my] = t.pt(x, y, 1); return drum(mx, my, t.k * 0.3, t.k * 5, marble) + dome(mx, my - t.k * 5, t.k * 0.38, ['#fcf8f3', '#e5dcd5']); };
   const [dx, dy] = t.pt(4, 4, 4.8);
-  const tomb = t.box([0, 0, 0], [8, 8, 1], marble) + minaret(0.4, 0.4) + minaret(7.6, 0.4) + minaret(0.4, 7.6) +
-    t.box([1.6, 1.6, 1], [6.4, 6.4, 4.8], tone('#f6f0ea')) + t.onLeft(6.4, '<rect x="3.2" y="1" width="1.6" height="2.4" rx="0.8" fill="#e3d6cf"/>') +
-    drum(dx, dy, t.k * 1.3, t.k * 0.6, marble) + onion(dx, dy - t.k * 0.6, t.k * 1.6, ['#fbf7f2', '#e3dad3']) + minaret(7.6, 7.6);
+  const tomb = t.box([0, 0, 0], [8, 8, 1], tone('#e8d2c6')) + minaret(0.4, 0.4) + minaret(7.6, 0.4) + minaret(0.4, 7.6) +
+    t.box([1.6, 1.6, 1], [6.4, 6.4, 4.8], tone('#f7f1ec')) + t.onLeft(6.4, '<rect x="3.2" y="1" width="1.6" height="2.4" rx="0.8" fill="#e6d4cb"/>') +
+    drum(dx, dy, t.k * 1.3, t.k * 0.6, marble) + onion(dx, dy - t.k * 0.6, t.k * 1.6, ['#fcf8f3', '#e5dcd5']) + minaret(7.6, 7.6);
   let trees = '';
   for (const [x, s] of [[0.74, 0.62], [0.9, 0.5]]) {
     const cx = w - big + big * x;
-    trees += `<ellipse cx="${n(cx)}" cy="${n(base - big * s * 0.5)}" rx="${n(big * s * 0.12)}" ry="${n(big * s * 0.5)}" fill="#9fc3a4"/><path d="M${n(cx)} ${n(base)}V${n(base - big * s)}A${n(big * s * 0.12)} ${n(big * s * 0.5)} 0 0 1 ${n(cx)} ${n(base)}Z" fill="#87ad8f"/>`;
+    trees += `<ellipse cx="${n(cx)}" cy="${n(base - big * s * 0.5)}" rx="${n(big * s * 0.12)}" ry="${n(big * s * 0.5)}" fill="#7fb68f"/><path d="M${n(cx)} ${n(base)}V${n(base - big * s)}A${n(big * s * 0.12)} ${n(big * s * 0.5)} 0 0 1 ${n(cx)} ${n(base)}Z" fill="#679f78"/>`;
   }
-  return calmSky(L, '#fff6ec') + rolling(w, base, top, ['#f6e5dc', '#f0dad3']) + tomb + trees + floor(w, h, base, '#efe1d6');
+  const pool = base + (h - base) * 0.3;
+  return garlands(w, sky) + disc(w / 2, sky.y + sky.r * 3.2, sky.r * 1.3, '#ffd2a6') +
+    hills(base, [[0.2 * w, 0.42 * w, top * 0.4], [0.8 * w, 0.4 * w, top * 0.32]], '#f4cfc2') + tomb + trees + floor(w, h, base, '#f1d0b8') + water(w, h, pool, ['#b7dcd8', '#93c8c4'], 12);
 }
 
 // ---------- 캐나다: the northern lights over snowy peaks, spruce forests and a still lake
