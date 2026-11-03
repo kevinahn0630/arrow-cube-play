@@ -19,6 +19,51 @@ export const PRICE = { hint: 200, eraser: 500 };
 // What a new player starts with.
 export const START = { coins: 0, hint: 3, eraser: 0 };
 
+// What the shop sells for money in the app (Google Play product ids; the user's
+// prices): three coin packs, the dearer the more coins a won, and taking the full-screen
+// ads out for good. `won` shows until Play gives its own price.
+export const PACKS = [
+  { id: 'coins_1000', coins: 1000, won: 1200 },
+  { id: 'coins_6000', coins: 6000, won: 5900, bonus: 20 },
+  { id: 'coins_15000', coins: 15000, won: 12000, bonus: 50 },
+];
+export const NO_ADS = { id: 'remove_ads', won: 5900 };
+
+// A full-screen ad between stages: after every third stage cleared in a country, on
+// the way to the next one, and not within two minutes of the last ad or after a stage
+// whose card's ad was watched (those wait for the next clear).
+export const AD_EVERY = 3;
+export const AD_GAP = 120000;
+
+// The daily gift (출석 보상): a week of gifts in turn, one a day. A day missed is not
+// lost: the next visit gets the next gift, and after the seventh they start over.
+// `gift` is the wallet's { n: gifts taken so far, last: the day of the last, 'YYYY-MM-DD' }.
+export const GIFTS = [['coins', 50], ['coins', 100], ['hint', 1], ['coins', 150], ['hint', 1], ['coins', 200], ['eraser', 1]];
+export const giftDay = (gift) => gift.n % GIFTS.length;
+export const giftReady = (gift, today) => gift.last !== today;
+
+// The climb (이벤트 tab), a season a month: every stage cleared in a country scores 10,
+// 10 more for each clear in a row before it (up to 40 more), and 10 for each of three
+// hearts kept (wrong taps counted the same where a stage has no hearts); a stage cleared
+// again scores a fifth. A clear that does not come is what breaks the row: a stage given
+// up or started over after a move (game.js). Every 200 points up the climb, from a tree
+// through the sky and the stratosphere into space, pays one of these.
+export const CLIMB_STEP = 200;
+export const CLIMB = [
+  ['coins', 100], ['hint', 1], ['coins', 150], ['hint', 1], ['eraser', 1],
+  ['coins', 150], ['hint', 1], ['coins', 200], ['hint', 2], ['eraser', 1],
+  ['coins', 200], ['hint', 2], ['coins', 250], ['eraser', 1], ['coins', 500],
+  ['coins', 250], ['hint', 3], ['coins', 300], ['eraser', 2], ['coins', 1000],
+];
+export const CLIMB_ZONES = ['나무', '하늘', '성층권', '우주'];
+export function climbPoints({ row, misses, again = false }) {
+  const points = 10 + 10 * Math.min(4, Math.max(0, row - 1)) + 10 * Math.max(0, 3 - misses);
+  return again ? Math.round(points / 5) : points;
+}
+// The rewards passed going from `before` points to `after`.
+export const climbRewards = (before, after) =>
+  CLIMB.slice(Math.min(CLIMB.length, Math.floor(before / CLIMB_STEP)), Math.min(CLIMB.length, Math.floor(after / CLIMB_STEP)));
+
 // An arrow with nothing of a gimmick about it, drawn in the plain colour: the only
 // kind the eraser takes.
 export const plain = (a) =>

@@ -5,9 +5,11 @@ import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caught
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
 import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadWallet, saveWallet } from './progress.js';
-import { coinsFor, PRICE, hintFor, erasable } from './economy.js';
-import { rewarded } from './ads.js';
-import { ICON } from './icons.js';
+import { coinsFor, PRICE, PACKS, NO_ADS, AD_EVERY, AD_GAP, GIFTS, giftDay, giftReady, CLIMB_STEP, climbPoints, climbRewards, hintFor, erasable } from './economy.js';
+import { rewarded, interstitial, sinceAd, native } from './ads.js';
+import { canSell, startBilling, buyProduct, priceOf } from './billing.js';
+import { ICON, rewardIcon } from './icons.js';
+import { climbArt, CLIMB_W } from './climb.js';
 import { STAGE_SEEDS } from './stage-seeds.js';
 import { TUTORIALS, tutorialParams, findTarget, lookCell } from './tutorial.js';
 import { TUTORIAL_SEEDS } from './tutorial-seeds.js';
@@ -219,6 +221,10 @@ const game = {
   hint: -1, // the arrow a hint lit (economy.js hintFor), until it leaves; -1 for none
   adHint: false, // this stage's one hint for an ad has been taken
   erasing: false, // the eraser is out: the next tap on an arrow takes it off the cube
+  counts: false, // a country stage (not a tutorial): it scores up the climb and counts toward the next full-screen ad
+  moved: false, // an arrow has been tapped or erased: giving the stage up now breaks the clears in a row
+  misses: 0, // wrong taps (the hearts lost, where a stage has them)
+  adWatched: false, // the clear card's ad was watched: no full-screen ad on the way to the next stage
 };
 
 function world(p) {
@@ -979,6 +985,15 @@ function refreshFree() {
 
 function load(params) {
   clearTimeout(game.solveTimer);
+  // A country stage given up or started over after a move breaks the clears in a row.
+  if (game.counts && game.moved && !game.cleared && wallet.climb.row) {
+    wallet.climb.row = 0;
+    saveWallet(wallet);
+  }
+  game.counts = game.world !== 'free' && WORLDS[game.world].tier > 0;
+  game.moved = false;
+  game.misses = 0;
+  game.adWatched = false;
   for (const ar of game.arrows) {
     if (ar.state === 'gone') continue;
     scene.remove(ar.mesh);
@@ -1080,6 +1095,7 @@ function tap(ar) {
   if (!tutAllows(ar)) return nudgeGuide();
   const { puz, state } = game;
   const members = group(puz, ar.index).map((j) => game.arrows[j]);
+  if (!game.tut) game.moved = true;
   if (canExit(puz, state, ar.index)) {
     const catchK = caughtBy(puz, state, ar.index)?.k;
     const cut = cutBy(puz, state, ar.index);
@@ -1125,6 +1141,7 @@ function tap(ar) {
     a.redUntil = now + 1400;
   }
   playBump();
+  game.misses++;
   loseHeart();
   tutDid('bump', ar.index);
 }
@@ -1331,6 +1348,7 @@ function autoSolve() {
 // step (tutorial.js) with the guide box under the cube.
 function loadTutorial(world) {
   load(tutorialParams(world, TUTORIAL_SEEDS[world]));
+  game.counts = false;
   // From the starting view, so the turns to what each step is about are easy to follow.
   camera.position.copy(HOME_VIEW);
   camera.up.set(0, 1, 0);
@@ -1531,12 +1549,14 @@ function hud() {
   $('remain').textContent = game.remaining;
 }
 
-// The card over the stage, holding top to bottom what `parts` names: a close button,
-// an icon (an ICON key), the title and a line under it, coins `won` (+n), a coin price to
-// `pay` (or nothing if the wallet is short), the coins the player `has`, a `tip`, an
-// `ad` for a reward (in the bottom row if `primary`) and the bottom row: a round
-// `restart` button and the `next` step. Words are kept few (2026-11-03 user request).
-function showCard({ close, icon, title, note, won, pay, has, tip, ad, restart, next }) {
+// The card over the stage or the home screen, holding top to bottom what `parts` names:
+// a close button, an icon (an ICON key), the title and a line under it, a `body` (an
+// element), coins `won` (+n), what the stage scored up the `climb`, a coin price to `pay`
+// (or nothing if the wallet is short), the coins the player `has`, `buyCoins` (opens the
+// shop), a `tip`, an `ad` for a reward (in the bottom row if `primary`) and the bottom
+// row: a round `restart` button and the `next` step (greyed if `next.off`). Words are kept
+// few (2026-11-03 user request).
+function showCard({ close, icon, title, note, body, won, climb, pay, has, buyCoins, tip, ad, restart, next }) {
   const card = $('card');
   const button = (cls, html, onclick) => {
     const b = node('button', cls);
@@ -1553,10 +1573,17 @@ function showCard({ close, icon, title, note, won, pay, has, tip, ad, restart, n
   }
   card.append(node('h2', '', title));
   if (note) card.append(node('p', 'clear-stars', note));
+  if (body) card.append(body);
   if (won !== undefined) {
     const r = node('div', 'reward');
     r.innerHTML = `${ICON.coin}+${won}`;
     card.append(r);
+  }
+  if (climb) {
+    const c = node('p', 'climb-won');
+    c.innerHTML = `${ICON.flag}+${climb.points}${climb.row > 1 ? `<small>${ICON.flame}${climb.row}연속</small>` : ''}`;
+    for (const [kind, n] of climb.got) c.insertAdjacentHTML('beforeend', `<span class="got">${rewardIcon(kind)}${kind === 'coins' ? `+${n}` : `×${n}`}</span>`);
+    card.append(c);
   }
   if (pay) {
     const b = button('primary pay', `${ICON.coin}<span>${pay.price}</span>`, pay.then);
@@ -1564,6 +1591,7 @@ function showCard({ close, icon, title, note, won, pay, has, tip, ad, restart, n
     card.append(b);
   }
   if (has !== undefined) card.append(node('p', 'have', `${digits(has)}코인`));
+  if (buyCoins) card.append(button('buy-coins', `${ICON.coin}<span>코인 사기</span>`, buyCoins));
   if (tip) {
     const t = node('p', 'tip');
     t.innerHTML = `${ICON.info}<span>${tip}</span>`;
@@ -1589,7 +1617,11 @@ function showCard({ close, icon, title, note, won, pay, has, tip, ad, restart, n
       row.append(b);
     }
     if (ad?.primary) row.append(adButton('primary ad'));
-    if (next) row.append(button('primary wide', next.text, next.then));
+    if (next) {
+      const b = button('primary wide', next.text, next.then);
+      b.disabled = !!next.off;
+      row.append(b);
+    }
     card.append(row);
   }
   $('clear').hidden = false;
@@ -1652,16 +1684,35 @@ function showClear() {
       parts.tip = '다시 깬 스테이지는 코인 1/5';
     }
     earn(won);
+    if (game.counts) parts.climb = climbUp(again);
     Object.assign(parts, { won, has: wallet.coins });
     parts.ad = {
       text: '광고 보면 두 배!',
       then: () => {
+        game.adWatched = true;
         earn(won);
         showCard({ ...parts, won: 2 * won, has: wallet.coins, ad: null });
       },
     };
   }
   showCard(parts);
+}
+
+// A country stage cleared: its points up the climb (economy.js climbPoints), the
+// rewards passed on the way, paid at once, and one more clear toward the next
+// full-screen ad.
+function climbUp(again) {
+  newSeason();
+  const c = wallet.climb;
+  c.row++;
+  const points = climbPoints({ row: c.row, misses: game.misses, again });
+  const got = climbRewards(c.points, c.points + points);
+  c.points += points;
+  for (const [kind, n] of got) give(kind, n);
+  wallet.adClears++;
+  saveWallet(wallet);
+  showWallet();
+  return { points, row: c.row, got };
 }
 
 // A tutorial played through: noted on the device, so stage 1 opens from now on. A
@@ -1677,8 +1728,16 @@ function showTutorialDone() {
 }
 
 // The card's next step: the next stage (from the last, the first again), or a new
-// puzzle in the generator.
-function nextStage() {
+// puzzle in the generator. In the app, every AD_EVERY country stages a full-screen ad
+// comes first, unless the ads were bought out; one that is not due yet (an ad watched on
+// the card, or the last ad under AD_GAP ago) waits for the next clear.
+async function nextStage() {
+  closeCard();
+  if (native && !wallet.noAds && wallet.adClears >= AD_EVERY && !game.adWatched && sinceAd() >= AD_GAP) {
+    wallet.adClears = 0;
+    saveWallet(wallet);
+    await interstitial();
+  }
   if (game.world === 'free') {
     $('seed').value = Number($('seed').value) + 1;
     return loadCustom();
@@ -1688,7 +1747,8 @@ function nextStage() {
 
 // ---------- coins and items
 
-// The wallet (progress.js): coins, and the hints and erasers kept.
+// The wallet (progress.js): coins, the hints and erasers kept, and the rest of what the
+// player has been given or has bought.
 const wallet = loadWallet();
 const digits = (n) => n.toLocaleString('ko-KR');
 function earn(coins) {
@@ -1696,6 +1756,11 @@ function earn(coins) {
   saveWallet(wallet);
   showWallet();
 }
+// A reward (economy.js: ['coins' | 'hint' | 'eraser', n]) into the wallet, not yet saved.
+function give(kind, n) {
+  wallet[kind === 'coins' ? 'coins' : kind] += n;
+}
+const rewardText = (kind, n) => (kind === 'coins' ? `+${digits(n)}코인` : `${kind === 'hint' ? '힌트' : '지우개'} +${n}`);
 
 // The coins and items wherever they show: the bar under the cube (in a world's stages,
 // not in a tutorial or the generator, and not while picking what to erase), the home
@@ -1703,19 +1768,12 @@ function earn(coins) {
 function showWallet() {
   const coins = `${ICON.coin}${digits(wallet.coins)}`;
   const tag = (n, price) => (n ? `<b>${n}</b>` : `<span class="cost">${ICON.coin}${price}</span>`);
-  $('coins').innerHTML = $('homeCoins').innerHTML = coins;
+  $('coins').innerHTML = $('homeCoins').innerHTML = $('shopCoins').innerHTML = coins;
   $('hintBtn').innerHTML = `${ICON.hint}힌트 ${tag(wallet.hint, PRICE.hint)}`;
   $('eraserBtn').innerHTML = `${ICON.eraser}지우개 ${tag(wallet.eraser, PRICE.eraser)}`;
   $('items').hidden = game.world === 'free' || !!game.tut || game.erasing;
   $('eraseBar').hidden = !game.erasing;
-  $('shopCoins').innerHTML = `${coins}코인`;
-  $('shopHint').textContent = `${wallet.hint}개`;
-  $('shopEraser').textContent = `${wallet.eraser}개`;
-  for (const item of ['hint', 'eraser']) {
-    const b = $(item === 'hint' ? 'buyHint' : 'buyEraser');
-    b.innerHTML = `${ICON.coin}${PRICE[item]}`;
-    b.disabled = wallet.coins < PRICE[item];
-  }
+  renderShop();
 }
 
 // Buys one of an item for coins.
@@ -1728,8 +1786,8 @@ function buy(item) {
   return true;
 }
 
-// Out of an item: the card offers one for coins, used at once, and a hint once a stage
-// for an ad.
+// Out of an item: the card offers one for coins, used at once (in the app, with a way
+// to the shop when the wallet is short), and a hint once a stage for an ad.
 function offer(item) {
   const use = item === 'hint' ? useHint : startErase;
   showCard({
@@ -1738,6 +1796,7 @@ function offer(item) {
     title: item === 'hint' ? '힌트가 없어요' : '지우개가 없어요',
     pay: { price: PRICE[item], then: () => buy(item) && (closeCard(), use()) },
     has: wallet.coins,
+    buyCoins: canSell() && wallet.coins < PRICE[item] ? () => (closeCard(), openShopPage()) : null,
     ad:
       item === 'hint' && !game.adHint
         ? {
@@ -1802,6 +1861,7 @@ function erase(ar) {
   }
   wallet.eraser--;
   saveWallet(wallet);
+  game.moved = true;
   remove(puz, state, ar.index);
   game.remaining--;
   // It thins away where it lay.
@@ -1815,12 +1875,147 @@ function erase(ar) {
   settle([ar]);
 }
 
-// The shop, from the coins on the home screen or in the bar: one hint or eraser at a time.
-const openShop = () => {
+// The shop: a hint or an eraser at a time for coins, and in the app the coin packs and
+// taking the ads out for money (billing.js), with Play's prices once it has given them.
+// It is the home screen's 상점 tab, or a page over a stage; #shopList moves to whichever
+// shows.
+let buying = ''; // the product being bought: its button waits
+function renderShop() {
+  const list = $('shopList');
+  const row = (icon, name, own, button) => {
+    const r = node('div', 'shop-row');
+    r.innerHTML = `<span class="ic">${icon}</span><div class="tx"><b>${name}</b>${own ? `<span class="own">${own}</span>` : ''}</div>`;
+    r.append(button);
+    return r;
+  };
+  const press = (cls, html, onclick, off = false) => {
+    const b = node('button', cls);
+    b.innerHTML = html;
+    b.onclick = onclick;
+    b.disabled = off;
+    return b;
+  };
+  const rows = ['hint', 'eraser'].map((item) =>
+    row(ICON[item], item === 'hint' ? '힌트' : '지우개', `${wallet[item]}개`, press('', `${ICON.coin}${PRICE[item]}`, () => buy(item), wallet.coins < PRICE[item])),
+  );
+  list.replaceChildren(...rows);
+  if (canSell()) {
+    const packs = node('div', 'packs');
+    PACKS.forEach((p, i) => {
+      const b = press('pack', `${p.bonus ? `<span class="bonus">+${p.bonus}%</span>` : ''}<span class="pk">${ICON.packs[i]}</span><b>${digits(p.coins)}</b><span class="won">${priceOf(p.id) ?? `${digits(p.won)}원`}</span>`, () => purchase(p.id), !!buying);
+      b.setAttribute('aria-label', `${digits(p.coins)}코인`);
+      packs.append(b);
+    });
+    list.append(packs);
+  }
+  if (wallet.noAds) {
+    const owned = node('span', 'owned');
+    owned.innerHTML = `${ICON.check}구매함`;
+    list.append(row(ICON.noads, '광고 제거', '', owned));
+  } else if (canSell()) {
+    list.append(row(ICON.noads, '광고 제거', '', press('won', priceOf(NO_ADS.id) ?? `${digits(NO_ADS.won)}원`, () => purchase(NO_ADS.id), !!buying)));
+  }
+}
+async function purchase(id) {
+  buying = id;
+  renderShop();
+  const how = await buyProduct(id);
+  buying = '';
+  renderShop();
+  if (how === 'failed') say('결제를 하지 못했어요');
+}
+// What a purchase brings (billing.js): coins once per transaction, or no more ads.
+function paidCoins(coins, tx) {
+  if (wallet.paid.includes(tx)) return;
+  wallet.paid = [...wallet.paid, tx].slice(-50);
+  earn(coins);
+  say(rewardText('coins', coins));
+}
+function paidNoAds() {
+  if (wallet.noAds) return;
+  wallet.noAds = true;
+  saveWallet(wallet);
+  renderShop();
+}
+
+// The shop as a page over a stage: from the coins in the bar, or 코인 사기.
+function openShopPage() {
+  stopErase();
+  $('shopPageBody').append($('shopList'));
+  $('shopPage').hidden = false;
+}
+const closeShopPage = () => ($('shopPage').hidden = true);
+
+// The home screen's tabs (2026-11-03): the shop, the worlds (with the daily gift's box)
+// and the climb.
+function showTab(tab) {
+  const on = { shop: 'tabShop', home: 'tabHome', climb: 'tabClimb' };
+  for (const [t, id] of Object.entries(on)) $(id).classList.toggle('on', t === tab);
+  $('homeBody').hidden = tab !== 'home';
+  $('giftBtn').hidden = tab !== 'home';
+  $('shopTab').hidden = tab !== 'shop';
+  $('climbTab').hidden = tab !== 'climb';
+  if (tab === 'home') layoutOrbs();
+  if (tab === 'shop') $('shopTab').append($('shopList'));
+  if (tab === 'climb') renderClimb();
+}
+
+// Today on this device, 'YYYY-MM-DD'.
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// The daily gift (economy.js GIFTS): the box shows a dot while today's is waiting; its
+// card shows the week, those taken faded and the one to take now (or tomorrow) marked.
+const showGift = () => $('giftBtn').classList.toggle('ready', giftReady(wallet.gift, today()));
+function openGift() {
+  const ready = giftReady(wallet.gift, today());
+  // Taken today and the week done: it shows full until tomorrow starts the next.
+  const taken = !ready && wallet.gift.n && !giftDay(wallet.gift) ? GIFTS.length : giftDay(wallet.gift);
+  const days = node('div', 'days');
+  GIFTS.forEach(([kind, n], i) => {
+    const d = node('div', `day${i < taken ? ' got' : i === taken ? (ready ? ' now' : ' soon') : ''}${i === GIFTS.length - 1 ? ' big' : ''}`);
+    d.innerHTML = `<span>${i + 1}일</span>${rewardIcon(kind)}<b>${kind === 'coins' ? n : `×${n}`}</b>${i < taken ? `<i class="ok">${ICON.check}</i>` : ''}`;
+    days.append(d);
+  });
+  showCard({ close: true, icon: 'gift', title: '출석 보상', body: days, next: { text: ready ? '받기' : '내일 또 받아요', off: !ready, then: takeGift } });
+}
+function takeGift() {
+  if (!giftReady(wallet.gift, today())) return;
+  const [kind, n] = GIFTS[giftDay(wallet.gift)];
+  give(kind, n);
+  wallet.gift = { n: wallet.gift.n + 1, last: today() };
+  saveWallet(wallet);
   showWallet();
-  $('shop').hidden = false;
-};
-const closeShop = () => ($('shop').hidden = true);
+  showGift();
+  closeCard();
+  say(rewardText(kind, n));
+}
+
+// The climb's season is the month: a new one starts its points over (the clears in a
+// row carry on).
+function newSeason() {
+  const season = today().slice(0, 7);
+  if (wallet.climb.season === season) return;
+  wallet.climb = { season, points: 0, row: wallet.climb.row };
+  saveWallet(wallet);
+}
+// The 이벤트 tab: the season and the days it has left, its points, how points are scored,
+// and the climb (climb.js) with the cube in view.
+function renderClimb() {
+  newSeason();
+  const [y, m] = wallet.climb.season.split('-').map(Number);
+  const left = Math.round((new Date(y, m, 1) - new Date(new Date().toDateString())) / 86400000);
+  $('climbSeason').textContent = `${m}월 시즌`;
+  $('climbLeft').textContent = `${left}일 남음`;
+  $('climbPoints').innerHTML = `${ICON.flag}${digits(wallet.climb.points)}`;
+  $('climbRules').innerHTML = `<span>${ICON.check}깨면 10</span><span>${ICON.flame}연속 +10</span><span>${ICON.heart}하트 +10</span>`;
+  const { svg, y: at } = climbArt(wallet.climb.points);
+  const scroll = $('climbScroll');
+  scroll.innerHTML = svg;
+  scroll.scrollTop = (at * scroll.clientWidth) / CLIMB_W - scroll.clientHeight * 0.55;
+}
 
 // A few words in the middle of the screen for a moment.
 let sayTimer = 0;
@@ -1873,12 +2068,14 @@ function shortName(key) {
 // still going).
 function showHome() {
   closeMenu();
+  closeShopPage();
   $('clear').hidden = true;
   game.screen = 'home';
   styleBars();
   renderHome();
   $('home').hidden = false;
-  layoutOrbs();
+  showTab('home');
+  showGift();
 }
 
 // Into the game: the home screen and the menu put away.
@@ -2103,24 +2300,32 @@ $('menuClose').onclick = closeMenu;
 $('menuBack').onclick = showHome;
 // A tap on the dimmed backdrop, or Escape, closes the menu.
 $('menu').onclick = (e) => e.target === $('menu') && closeMenu();
-addEventListener('keydown', (e) => e.key === 'Escape' && (closeMenu(), closeShop()));
+addEventListener('keydown', (e) => e.key === 'Escape' && (closeMenu(), closeShopPage()));
 
 // The generator panel's gimmick list, from the worlds (by tier).
 for (const key of [...COUNTRIES].sort((a, b) => WORLDS[a].tier - WORLDS[b].tier)) {
   $('gimmick').append(new Option(`${WORLDS[key].name} — ${WORLDS[key].about}`, key));
 }
 // Coins and items: the bar under the cube, the note while erasing, the shop.
-$('eraseIcon').innerHTML = $('shopEraserIcon').innerHTML = ICON.eraser;
-$('shopHintIcon').innerHTML = ICON.hint;
+$('eraseIcon').innerHTML = ICON.eraser;
 $('eraseCancel').innerHTML = ICON.close;
 $('hintBtn').onclick = useHint;
 $('eraserBtn').onclick = startErase;
 $('eraseCancel').onclick = stopErase;
-$('coins').onclick = $('homeCoins').onclick = openShop;
-$('shopClose').onclick = closeShop;
-$('shop').onclick = (e) => e.target === $('shop') && closeShop();
-$('buyHint').onclick = () => buy('hint');
-$('buyEraser').onclick = () => buy('eraser');
+$('coins').onclick = openShopPage;
+$('homeCoins').onclick = () => showTab('shop');
+$('shopBack').innerHTML = ICON.back;
+$('shopBack').onclick = closeShopPage;
+// The home screen's tabs and the daily gift's box.
+for (const [id, tab, icon] of [['tabShop', 'shop', ICON.shop], ['tabHome', 'home', ICON.home], ['tabClimb', 'climb', ICON.flag]]) {
+  $(id).querySelector('i').innerHTML = icon;
+  $(id).onclick = () => showTab(tab);
+}
+$('giftBtn').insertAdjacentHTML('afterbegin', ICON.gift);
+$('giftBtn').onclick = openGift;
+// Purchases: paid out as they come, and Play's prices into the shop once it has them.
+startBilling({ coins: paidCoins, noAds: paidNoAds, change: renderShop });
+newSeason();
 
 const zoomBy = (f) => {
   const len = THREE.MathUtils.clamp(camera.position.length() * f, controls.minDistance, controls.maxDistance);
@@ -2178,7 +2383,7 @@ addEventListener('resize', resize);
 resize();
 
 // Handle for poking at the game from the browser console.
-window.arrowCube = { game, pick, tap, camera, box, raycaster };
+window.arrowCube = { game, wallet, pick, tap, camera, box, raycaster };
 
 loadStage('home', 1);
 requestAnimationFrame(frame);

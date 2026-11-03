@@ -64,15 +64,30 @@ export function markTutorialDone(world) {
 // Whether a tier of countries is open: enough stars collected.
 export const tierOpen = (progress, tier) => totalStars(progress) >= TIER_STARS[tier];
 
-// The wallet: coins, hints and erasers kept, and whether the player has been told that
-// a stage cleared again pays a fifth (`told`). A new player starts with economy.js START.
+// The wallet: coins, hints and erasers kept; whether the player has been told that a
+// stage cleared again pays a fifth (`told`); whether the ads have been bought out
+// (`noAds`) and the purchases already paid out (`paid`, Play transaction ids); stages
+// cleared since the last full-screen ad (`adClears`); the daily gift (`gift`) and the
+// climb (`climb`: its season, 'YYYY-MM', its points and the clears in a row). A new
+// player starts with economy.js START.
 const WALLET_KEY = 'arrowCube.wallet.v1';
 export function loadWallet() {
+  let w = null;
   try {
-    const w = JSON.parse(localStorage.getItem(WALLET_KEY));
-    if (w) return { coins: w.coins | 0, hint: w.hint | 0, eraser: w.eraser | 0, told: !!w.told };
+    w = JSON.parse(localStorage.getItem(WALLET_KEY));
   } catch {}
-  return { ...START, told: false };
+  const has = (v) => (w ? v | 0 : 0);
+  return {
+    coins: w ? w.coins | 0 : START.coins,
+    hint: w ? w.hint | 0 : START.hint,
+    eraser: w ? w.eraser | 0 : START.eraser,
+    told: !!w?.told,
+    noAds: !!w?.noAds,
+    paid: Array.isArray(w?.paid) ? w.paid.slice(-50) : [],
+    adClears: has(w?.adClears),
+    gift: { n: has(w?.gift?.n), last: String(w?.gift?.last ?? '') },
+    climb: { season: String(w?.climb?.season ?? ''), points: has(w?.climb?.points), row: has(w?.climb?.row) },
+  };
 }
 export function saveWallet(wallet) {
   try {

@@ -145,10 +145,11 @@
   .clear-stars:empty { display: none; }
   .clear .clear-stars { max-width: 300px; line-height: 1.5; }
   /* Cards (game.js showCard): the clear card with its coins, Game Over, buying an item. Buttons run the card's width. */
-  .clear { z-index: 8; }
+  .clear { z-index: 22; }
   .clear .card { position: relative; width: min(300px, calc(100vw - 40px)); min-width: 0; padding: 26px 24px 20px; }
   .card .badge-ic { width: 54px; height: 54px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 50%; background: #fff4dc; color: #d9932a; }
   .card .badge-ic svg { width: 28px; height: 28px; }
+  .card .badge-ic svg.toy { width: 40px; height: 40px; }
   .card .badge-ic.heart { background: #fde6e2; color: var(--accent); }
   .card .close-x { position: absolute; top: 10px; right: 10px; }
   .card .reward { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 4px; font-size: 32px; font-weight: 800; color: #c98a12; }
@@ -175,11 +176,12 @@
   .itembar .coins { display: flex; align-items: center; gap: 5px; height: 44px; padding: 0 9px 0 8px; border: 0; background: none; font-size: 15px; font-weight: 800; color: #5a4862; }
   .item { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 13px 0 10px; border-radius: 16px; background: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; }
   .item svg { width: 22px; height: 22px; }
+  .item svg.toy { width: 27px; height: 27px; margin: -3px -1px; }
   .item b { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: #fff; font-size: 12px; line-height: 20px; }
   .item .cost { display: flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 800; color: #b57d14; }
   /* Picking an arrow to erase: a note in the bar's place, like the tutorial's guide. */
   .erasebar { position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; background: #fffffff2; border-left: 5px solid var(--accent); }
-  .erasebar .erase-ic svg { display: block; width: 24px; height: 24px; color: var(--accent); }
+  .erasebar .erase-ic svg { display: block; width: 30px; height: 30px; margin: -3px 0; }
   .erasebar b { flex: 1; min-width: 0; font-size: 15px; }
   .erasebar.nudge { animation: shake 0.4s; }
   .erasebar .x, .card .close-x { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border: 0; background: none; color: var(--muted); }
@@ -283,18 +285,89 @@
   .home-stars { padding: 7px 12px; font-size: 14px; font-weight: 700; white-space: nowrap; }
   .home-coins { display: flex; align-items: center; gap: 5px; padding: 7px 12px 7px 9px; font-size: 14px; font-weight: 700; white-space: nowrap; }
   .home-coins .coin { width: 18px; height: 18px; }
-  /* The shop: hints and erasers for coins, from the coins on the home screen or in the item bar. */
-  .shop .sheet { width: min(420px, 100%); }
-  .shop .sheet-title span { display: flex; align-items: center; gap: 4px; }
+  /* The shop (game.js renderShop): hints and erasers for coins, then in the app the coin
+     packs and taking the ads out for money. The 상점 tab, or a page over a stage. */
+  .shop-list, .home-body > .shop-list { max-width: 480px; margin: 0 auto; }
+  .shop-tab { padding-top: 12px; }
   .shop-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 14px 12px 14px 14px; background: #fff; border: 1px solid var(--line); border-radius: 18px; }
   .shop-row .ic { width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 16px; background: #fbf1ee; }
-  .shop-row .ic svg { width: 25px; height: 25px; }
+  .shop-row .ic svg { width: 38px; height: 38px; }
   .shop-row .tx { flex: 1; min-width: 0; }
   .shop-row b { display: block; font-size: 15px; }
   .shop-row .own { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; color: var(--accent); }
   .shop-row button { display: flex; align-items: center; gap: 4px; padding: 9px 12px; font-weight: 800; color: #fff; background: var(--accent); border-color: transparent; white-space: nowrap; }
   .shop-row button:disabled { opacity: 0.45; }
   .shop-row button .coin { width: 17px; height: 17px; }
+  .shop-row .won { min-width: 76px; justify-content: center; }
+  .shop-row .owned { display: flex; align-items: center; gap: 4px; padding: 9px 4px; font-size: 14px; font-weight: 800; color: var(--accent); }
+  .shop-row .owned svg { width: 20px; height: 20px; }
+  .packs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 2px 0 10px; }
+  .pack { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 6px 10px; background: #fff; border: 1px solid var(--line); border-radius: 18px; }
+  .pack .pk svg { display: block; width: 48px; height: 39px; }
+  .pack b { font-size: 16px; font-weight: 800; }
+  .pack .won { width: 100%; padding: 8px 0; border-radius: 12px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 800; }
+  .pack:disabled { opacity: 0.6; }
+  .bonus { position: absolute; top: -8px; right: -4px; padding: 2px 7px; border-radius: 999px; background: #fde6e2; box-shadow: 0 2px 6px #e2786a33; color: var(--accent); font-size: 11px; font-weight: 800; }
+  .page { position: fixed; inset: 0; z-index: 21; display: flex; flex-direction: column; background: linear-gradient(180deg, #fbe2da 0%, #f6e9f0 45%, #e7e7f7 100%); }
+  .page[hidden] { display: none; }
+  .page-head { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 520px; margin: 0 auto; padding: max(14px, env(safe-area-inset-top)) 16px 10px 8px; }
+  .page-head b { flex: 1; font-size: 18px; }
+  .page-head .back { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: 0; background: none; }
+  .page-head .back svg { width: 26px; height: 26px; }
+  .page .pill { background: #ffffffa8; border-color: #ffffffe6; box-shadow: 0 6px 16px #b48aa024; color: #5a4862; }
+  .page-body { flex: 1; overflow: auto; padding: 6px 16px max(24px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+  /* The home screen's tabs (2026-11-03): the shop, the worlds and the climb; on the
+     worlds' tab the daily gift's box floats at the side. */
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; justify-content: center; padding: 6px 10px max(8px, env(safe-area-inset-bottom)); background: #fffffff2; border-top: 1px solid #f3e4e8; box-shadow: 0 -8px 22px #b48aa01c; }
+  .tab { flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border: 0; border-radius: 0; background: none; font-size: 11px; font-weight: 700; color: #a594ad; }
+  .tab i { position: relative; display: grid; place-items: center; width: 56px; height: 30px; border-radius: 999px; }
+  .tab svg { width: 23px; height: 23px; }
+  .tab.on { color: var(--accent); }
+  .tab.on i { background: #fde6e2; }
+  .home .home-body { padding-bottom: calc(max(8px, env(safe-area-inset-bottom)) + 76px); }
+  .home .home-body[hidden] { display: none; }
+  .gift-box { position: fixed; right: 14px; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 80px); z-index: 2; width: 58px; height: 58px; padding: 0; display: grid; place-items: center; border-radius: 20px; background: #fff; border: 1px solid #ffffffe6; box-shadow: 0 10px 24px #b48aa047; }
+  .gift-box[hidden] { display: none; }
+  .gift-box svg { width: 40px; height: 40px; }
+  .gift-box .dot { position: absolute; top: -4px; right: -4px; width: 14px; height: 14px; border-radius: 50%; background: #ef5a4c; border: 2.5px solid #fff; display: none; }
+  .gift-box.ready .dot { display: block; }
+  /* The daily gift's card: the week's seven gifts, those taken faded. */
+  .days { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: 0 0 16px; }
+  .day { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 2px 8px; border-radius: 14px; background: #fbf4f2; border: 1.5px solid transparent; font-size: 11px; color: var(--muted); }
+  .day svg { width: 30px; height: 30px; }
+  .day .coin { width: 26px; height: 26px; }
+  .day b { font-size: 13px; color: var(--ink); }
+  .day.big { grid-column: span 2; }
+  .day.got { opacity: 0.5; }
+  .day .ok { position: absolute; top: 4px; right: 4px; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); }
+  .day .ok svg { width: 11px; height: 11px; color: #fff; }
+  .day.now { background: #fff; border-color: var(--accent); box-shadow: 0 4px 12px #e2786a33; }
+  .day.now span { color: var(--accent); font-weight: 800; }
+  .day.soon { border-style: dashed; border-color: #e2786a80; }
+  /* The climb (이벤트 tab): the season and its points over the picture (climb.js). */
+  .climb-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 480px; margin: 0 auto; }
+  .climb-tab[hidden] { display: none; }
+  .climb-head { display: flex; align-items: center; gap: 10px; margin: 10px 16px 0; }
+  .climb-title { flex: 1; }
+  .climb-title b { display: block; font-size: 17px; }
+  .climb-title span { font-size: 12px; color: var(--muted); }
+  .climb-points { display: flex; align-items: center; gap: 5px; padding: 7px 13px 7px 10px; font-size: 15px; font-weight: 800; color: var(--accent) !important; }
+  .climb-points svg { width: 18px; height: 18px; }
+  .climb-rules { display: flex; gap: 6px; margin: 10px 16px; }
+  .climb-rules span { display: flex; align-items: center; gap: 4px; padding: 5px 10px 5px 8px; border-radius: 999px; background: #ffffffb0; font-size: 12px; font-weight: 700; color: #7c6a8c; }
+  .climb-rules svg { width: 14px; height: 14px; color: var(--accent); }
+  .climb-scroll { flex: 1; min-height: 0; overflow: auto; margin-bottom: calc(max(8px, env(safe-area-inset-bottom)) + 56px); border-radius: 22px 22px 0 0; overscroll-behavior: contain; }
+  .climb-scroll svg { display: block; width: 100%; height: auto; }
+  /* A stage's card: the points it scored up the climb, the clears in a row and any
+     rewards passed; 코인 사기 when the wallet is short. */
+  .card .climb-won { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; width: fit-content; margin: 2px auto 10px; padding: 5px 12px 5px 9px; border-radius: 999px; background: #fde6e2; font-size: 14px; font-weight: 800; color: var(--accent); }
+  .card .climb-won svg { width: 16px; height: 16px; }
+  .card .climb-won small { display: flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 700; color: #c4645a; }
+  .card .climb-won .got { display: flex; align-items: center; gap: 2px; padding-left: 6px; border-left: 1px solid #f3c2ba; font-size: 13px; color: #b57d14; }
+  .card .climb-won .got svg { width: 20px; height: 20px; }
+  .card .buy-coins { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin: 0 0 10px; font-weight: 700; color: #6b4e2a; background: #fff4dc; border-color: #f4dfb2; }
+  .card .buy-coins .coin { width: 18px; height: 18px; }
+  .card .wide:disabled { opacity: 0.5; }
   .home-body { flex: 1; overflow: auto; padding: 0 16px max(24px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
   .home-body > * { max-width: 728px; margin-left: auto; margin-right: auto; }
   .continue { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px; padding: 12px 14px; text-align: left; color: #5a4862; background: #ffffffc4; border: 1px solid #ffffffe6; border-radius: 20px; box-shadow: 0 8px 20px #b48aa02e; }
@@ -484,17 +557,16 @@
     </section>
   </div>
 
-  <div class="overlay shop" id="shop" hidden>
-    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
-      <header class="sheet-head">
-        <div class="sheet-title"><b id="shopTitle">상점</b><span id="shopCoins"></span></div>
-        <button class="icon" id="shopClose" aria-label="닫기">✕</button>
-      </header>
-      <div class="sheet-body">
-        <div class="shop-row"><span class="ic" id="shopHintIcon"></span><div class="tx"><b>힌트</b><span class="own" id="shopHint"></span></div><button id="buyHint"></button></div>
-        <div class="shop-row"><span class="ic" id="shopEraserIcon"></span><div class="tx"><b>지우개</b><span class="own" id="shopEraser"></span></div><button id="buyEraser"></button></div>
-      </div>
-    </section>
+  <!-- The shop as a page over a stage (from the coins in the bar, or 코인 사기); on the
+       home screen it is the 상점 tab. game.js renderShop fills #shopList, which moves to
+       wherever the shop shows. -->
+  <div class="page" id="shopPage" hidden>
+    <header class="page-head">
+      <button class="back" id="shopBack" aria-label="뒤로"></button>
+      <b>상점</b>
+      <div class="pill home-coins" id="shopCoins"></div>
+    </header>
+    <div class="page-body" id="shopPageBody"><div class="shop-list" id="shopList"></div></div>
   </div>
 
   <div class="home" id="home" hidden>
@@ -505,6 +577,21 @@
       <button class="pill icon" id="homeSound" title="효과음 끄기">🔊</button>
     </header>
     <div class="home-body" id="homeBody"></div>
+    <div class="home-body shop-tab" id="shopTab" hidden></div>
+    <div class="climb-tab" id="climbTab" hidden>
+      <div class="climb-head">
+        <div class="climb-title"><b id="climbSeason"></b><span id="climbLeft"></span></div>
+        <div class="pill climb-points" id="climbPoints"></div>
+      </div>
+      <div class="climb-rules" id="climbRules"></div>
+      <div class="climb-scroll" id="climbScroll"></div>
+    </div>
+    <button class="gift-box" id="giftBtn" aria-label="출석 보상"><span class="dot"></span></button>
+    <nav class="tabbar" aria-label="홈 화면">
+      <button class="tab" id="tabShop"><i></i>상점</button>
+      <button class="tab on" id="tabHome"><i></i>홈</button>
+      <button class="tab" id="tabClimb"><i></i>이벤트</button>
+    </nav>
   </div>
 
   <div class="splash" id="splash">
