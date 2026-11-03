@@ -91,7 +91,9 @@
     padding: 10px 14px;
     cursor: pointer;
   }
-  button:active { transform: translateY(1px); }
+  /* Buttons give under a press and spring back when let go. */
+  button { transition: transform 0.3s cubic-bezier(0.34, 1.8, 0.64, 1); }
+  button:active:not(:disabled) { transform: scale(0.93); transition-duration: 0.06s; }
   button.primary { background: var(--accent); color: #fff; border-color: transparent; }
   .zoom {
     position: fixed;
@@ -137,6 +139,7 @@
   .clear {
     position: fixed;
     inset: 0;
+    overflow: hidden;
     display: grid;
     place-items: center;
     background: #4a3f5c4d;
@@ -453,6 +456,56 @@
   .stage.cleared { background: var(--accent); color: #fff; border-color: transparent; }
   .stage.current { outline: 3px solid var(--ink); outline-offset: 2px; }
   .stage .mark { position: absolute; top: -7px; right: -5px; font-size: 13px; color: #e3a21a; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+
+  /* Motion (2026-11-04, fx.js): the layer effects fly in, cards popping up and their parts
+     rising in turn, the clear card's ribbon and sun rays, gleams on the big buttons, numbers
+     that bump, the tab picked popping up, the home screen's orbs bobbing and the gift's box
+     wiggling, the climb's ticks; the idle loops stop where less motion was asked for. */
+  #fx { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+  #fx > * { position: absolute; left: 0; top: 0; font-style: normal; will-change: transform; }
+  .fx-fly svg { display: block; width: 100%; height: 100%; }
+  .fx-spark { width: 9px; height: 9px; border-radius: 2px; background: #ffc93f; box-shadow: 0 0 8px #ffd96b, 0 0 0 1.5px #fff8; }
+  .fx-heart { width: 24px; font-size: 24px; line-height: 28px; text-align: center; color: #e2786a; }
+  .clear:not([hidden]) { animation: fade-in 0.2s ease-out; }
+  .clear:not([hidden]) .card { animation: card-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .clear.closing { animation: fade-out 0.16s ease-in forwards; }
+  .clear.closing .card { animation: card-out 0.16s ease-in forwards; }
+  .card > .rise { animation: rise 0.36s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; animation-delay: calc(var(--i) * 55ms + 120ms); }
+  @keyframes fade-in { from { opacity: 0; } }
+  @keyframes fade-out { to { opacity: 0; } }
+  @keyframes card-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { opacity: 1; } }
+  @keyframes card-out { to { transform: scale(0.85); opacity: 0; } }
+  @keyframes rise { from { transform: translateY(12px); opacity: 0; } }
+  .card h2.ribbon { position: relative; margin: -4px -40px 16px; padding: 10px 8px 11px; border-radius: 12px; background: linear-gradient(180deg, #f9a093, #ec7868); box-shadow: 0 6px 14px #e2786a47; color: #fff; font-size: 21px; letter-spacing: 1px; text-shadow: 0 2px 0 #cf6255; animation: ribbon-in 0.5s 0.08s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .card h2.ribbon::before, .card h2.ribbon::after { content: ''; position: absolute; bottom: -9px; width: 16px; height: 9px; background: #c95f52; }
+  .card h2.ribbon::before { left: 0; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+  .card h2.ribbon::after { right: 0; clip-path: polygon(0 0, 100% 0, 0 100%); }
+  @keyframes ribbon-in { from { transform: translateY(-34px) scale(0.7); opacity: 0; } }
+  .rays { position: absolute; left: 50%; top: 50%; width: 640px; height: 640px; margin: -320px 0 0 -320px; border-radius: 50%; pointer-events: none; background: repeating-conic-gradient(#fff3c4 0deg 8deg, #fff3c400 8deg 20deg); -webkit-mask: radial-gradient(circle, #000 12%, #0000 66%); mask: radial-gradient(circle, #000 12%, #0000 66%); opacity: 0.75; animation: spin 24s linear infinite, fade-in 0.6s ease-out; }
+  .rays[hidden] { display: none; }
+  @keyframes spin { to { transform: rotate(1turn); } }
+  .card .primary { position: relative; overflow: hidden; }
+  .card .primary::after { content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 45%; background: linear-gradient(100deg, #fff0, #ffffff70, #fff0); transform: skewX(-20deg); animation: gleam 3.4s ease-in-out 1s infinite; pointer-events: none; }
+  .card .primary:disabled::after { animation: none; }
+  @keyframes gleam { 0% { transform: translateX(0) skewX(-20deg); } 30%, 100% { transform: translateX(420%) skewX(-20deg); } }
+  .bump { animation: bump 0.36s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes bump { 40% { transform: scale(1.2); } }
+  .tab.on i.pop { animation: tab-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes tab-pop { 0% { transform: translateY(16px) scale(0.6); } 70% { transform: translateY(-3px) scale(1.06); } }
+  .world-orb .orb-ball, .world-orb .orb-ring { animation: orb-bob 4.4s ease-in-out var(--bob, 0s) infinite; }
+  @keyframes orb-bob { 50% { transform: translateY(-5px); } }
+  .gift-box.ready svg { transform-origin: 50% 85%; animation: wiggle 2.8s ease-in-out infinite; }
+  @keyframes wiggle { 0%, 70%, 100% { transform: none; } 76% { transform: rotate(-11deg) scale(1.08); } 82% { transform: rotate(9deg) scale(1.08); } 88% { transform: rotate(-6deg); } 94% { transform: rotate(3deg); } }
+  .toast:not([hidden]) { animation: toast-in 0.34s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes toast-in { from { transform: translateX(-50%) scale(0.6); opacity: 0; } }
+  .stop.fresh .tick { opacity: 0; }
+  .stop.pop .tick, .stop.pop .ring { transform-box: fill-box; transform-origin: center; }
+  .stop.pop .tick { animation: tick-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .stop.pop .ring { animation: bump 0.5s ease-out; }
+  @keyframes tick-pop { from { transform: scale(0); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .world-orb .orb-ball, .world-orb .orb-ring, .gift-box.ready svg, .card .primary::after, .rays { animation: none; }
+  }
 </style>
 <script type="importmap">
   {
@@ -547,6 +600,7 @@
 
   <!-- The card over a stage (clear, Game Over, buying an item): game.js showCard fills it. -->
   <div class="clear" id="clear" hidden>
+    <div class="rays" id="rays" hidden></div>
     <div class="card" id="card" role="dialog" aria-modal="true"></div>
   </div>
 
@@ -636,6 +690,9 @@
       return { ready: () => (ready = true) };
     })();
   </script>
+
+  <!-- Coins, confetti and sparkles fly here (fx.js). -->
+  <div id="fx" aria-hidden="true"></div>
 
   <script type="module" src="src/game.js"></script>
 </body>

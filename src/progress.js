@@ -68,8 +68,9 @@ export const tierOpen = (progress, tier) => totalStars(progress) >= TIER_STARS[t
 // stage cleared again pays a fifth (`told`); whether the ads have been bought out
 // (`noAds`) and the purchases already paid out (`paid`, Play transaction ids); stages
 // cleared since the last full-screen ad (`adClears`); the daily gift (`gift`) and the
-// climb (`climb`: its season, 'YYYY-MM', its points and the clears in a row). A new
-// player starts with economy.js START.
+// climb (`climb`: its season, 'YYYY-MM', its points, the clears in a row, and the points
+// the 이벤트 tab last showed, `seen`, so it can walk the cube up from there). A new player
+// starts with economy.js START.
 const WALLET_KEY = 'arrowCube.wallet.v1';
 export function loadWallet() {
   let w = null;
@@ -86,7 +87,7 @@ export function loadWallet() {
     paid: Array.isArray(w?.paid) ? w.paid.slice(-50) : [],
     adClears: has(w?.adClears),
     gift: { n: has(w?.gift?.n), last: String(w?.gift?.last ?? '') },
-    climb: { season: String(w?.climb?.season ?? ''), points: has(w?.climb?.points), row: has(w?.climb?.row) },
+    climb: { season: String(w?.climb?.season ?? ''), points: has(w?.climb?.points), row: has(w?.climb?.row), seen: has(w?.climb?.seen) },
   };
 }
 export function saveWallet(wallet) {

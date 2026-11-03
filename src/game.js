@@ -9,7 +9,8 @@ import { coinsFor, PRICE, PACKS, NO_ADS, AD_EVERY, AD_GAP, GIFTS, giftDay, giftR
 import { rewarded, interstitial, sinceAd, native } from './ads.js';
 import { canSell, startBilling, buyProduct, priceOf } from './billing.js';
 import { ICON, rewardIcon } from './icons.js';
-import { climbArt, CLIMB_W } from './climb.js';
+import { climbArt, climbTrail, CLIMB_W } from './climb.js';
+import { calm, spot, replay, countUp, fly, confetti, sparkle, heartBreak } from './fx.js';
 import { STAGE_SEEDS } from './stage-seeds.js';
 import { TUTORIALS, tutorialParams, findTarget, lookCell } from './tutorial.js';
 import { TUTORIAL_SEEDS } from './tutorial-seeds.js';
@@ -231,6 +232,21 @@ function world(p) {
   const N = game.puz.cube.N;
   const k = S / (2 * N);
   return new THREE.Vector3((p[0] - N) * k, (p[1] - N) * k, (p[2] - N) * k);
+}
+
+// Where a cell of the cube shows on the screen, in CSS pixels (for fx.js effects).
+function screenOf(cell) {
+  const v = world(game.puz.cube.cells[cell].p).project(camera);
+  const r = renderer.domElement.getBoundingClientRect();
+  return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
+}
+// Where the effect of a tap on an arrow goes: where the finger touched, or for a tap from
+// code, the given cell of the arrow if its face is toward the camera (none otherwise).
+let touch = { x: 0, y: 0, t: -1e9 }; // the last tap on the cube
+function tapSpot(cell) {
+  if (performance.now() - touch.t < 150) return touch;
+  const [x, y, z] = game.puz.cube.cells[cell].n;
+  return camera.position.dot(new THREE.Vector3(x, y, z)) > S / 2 ? screenOf(cell) : null;
 }
 
 // Flat strip from P to Q lying on the face with normal n, half-width hw, lifted off
@@ -1097,6 +1113,8 @@ function tap(ar) {
   const members = group(puz, ar.index).map((j) => game.arrows[j]);
   if (!game.tut) game.moved = true;
   if (canExit(puz, state, ar.index)) {
+    const at = tapSpot(pose(puz, state, ar.index).cells.at(-1));
+    if (at) sparkle(at);
     const catchK = caughtBy(puz, state, ar.index)?.k;
     const cut = cutBy(puz, state, ar.index);
     const out = remove(puz, state, ar.index).map((j) => game.arrows[j]);
@@ -1152,6 +1170,7 @@ function tap(ar) {
 // stuck for good. A hint's arrow that can no longer leave goes dark.
 function settle(out, cut = null) {
   const { puz, state } = game;
+  replay($('remain').parentElement, 'bump');
   refreshFree();
   // A lantern leaving lights up the arrows round it.
   if (game.showFree || out.some((a) => a.lantern)) redrawAll();
@@ -1176,6 +1195,9 @@ function settle(out, cut = null) {
 // so and starts the stage over.
 function loseHeart() {
   if (!game.heartsMax || game.cleared || game.stuck) return;
+  // The heart going breaks off where it was (fx.js) before the row shows it faded.
+  const going = [...$('hearts').querySelectorAll('span')].at(-1);
+  if (going) heartBreak(spot(going));
   game.hearts--;
   drawHearts(true);
   if (game.hearts <= 0) game.solveTimer = setTimeout(showNoHearts, 700);
@@ -1185,7 +1207,7 @@ function loseHeart() {
 function drawHearts(lost = false) {
   const el = $('hearts');
   el.hidden = !game.heartsMax;
-  el.innerHTML = '♥'.repeat(Math.max(0, game.hearts)) + `<i>${'♥'.repeat(game.heartsMax - Math.max(0, game.hearts))}</i>`;
+  el.innerHTML = '<span>♥</span>'.repeat(Math.max(0, game.hearts)) + `<i>${'♥'.repeat(game.heartsMax - Math.max(0, game.hearts))}</i>`;
   el.setAttribute('aria-label', `하트 ${game.heartsMax}개 중 ${Math.max(0, game.hearts)}개 남음`);
   if (!lost) return;
   el.classList.remove('lost');
@@ -1314,7 +1336,10 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 renderer.domElement.addEventListener('pointerup', (e) => {
   if (!down || !e.isPrimary) return;
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
-  if (!down.multi && moved < 8 && performance.now() - down.t < 450) tap(pick(e.clientX, e.clientY));
+  if (!down.multi && moved < 8 && performance.now() - down.t < 450) {
+    touch = { x: e.clientX, y: e.clientY, t: performance.now() };
+    tap(pick(e.clientX, e.clientY));
+  }
   down = null;
 });
 
@@ -1556,8 +1581,14 @@ function hud() {
 // shop), a `tip`, an `ad` for a reward (in the bottom row if `primary`) and the bottom
 // row: a round `restart` button and the `next` step (greyed if `next.off`). Words are kept
 // few (2026-11-03 user request).
-function showCard({ close, icon, title, note, body, won, climb, pay, has, buyCoins, tip, ad, restart, next }) {
+// A clear (`celebrate`) puts the title on a ribbon with sun rays turning behind the card
+// and confetti bursting from it, and the coins count up from `wonFrom` (fx.js). A card
+// that comes up pops in with its parts rising one after another.
+function showCard({ close, icon, title, celebrate, note, body, won, wonFrom = 0, climb, pay, has, buyCoins, tip, ad, restart, next }) {
   const card = $('card');
+  const fresh = $('clear').hidden || $('clear').classList.contains('closing');
+  clearTimeout(closing);
+  $('clear').classList.remove('closing');
   const button = (cls, html, onclick) => {
     const b = node('button', cls);
     b.innerHTML = html;
@@ -1571,13 +1602,14 @@ function showCard({ close, icon, title, note, body, won, climb, pay, has, buyCoi
     ic.innerHTML = ICON[icon];
     card.append(ic);
   }
-  card.append(node('h2', '', title));
+  card.append(node('h2', celebrate ? 'ribbon' : '', title));
   if (note) card.append(node('p', 'clear-stars', note));
   if (body) card.append(body);
   if (won !== undefined) {
     const r = node('div', 'reward');
-    r.innerHTML = `${ICON.coin}+${won}`;
+    r.innerHTML = `${ICON.coin}<span>+${wonFrom}</span>`;
     card.append(r);
+    setTimeout(() => countUp(r.querySelector('span'), wonFrom, won, 700, (n) => `+${n}`), fresh ? 380 : 0);
   }
   if (climb) {
     const c = node('p', 'climb-won');
@@ -1624,9 +1656,22 @@ function showCard({ close, icon, title, note, body, won, climb, pay, has, buyCoi
     }
     card.append(row);
   }
+  if (fresh) [...card.children].forEach((el, i) => el.classList.contains('close-x') || (el.classList.add('rise'), el.style.setProperty('--i', i)));
+  $('rays').hidden = !celebrate;
   $('clear').hidden = false;
+  if (celebrate && fresh) setTimeout(() => confetti(card.querySelector('h2')), 160);
 }
-const closeCard = () => ($('clear').hidden = true);
+// The card shrinks away, unless another comes up first.
+let closing = 0;
+function closeCard() {
+  const clear = $('clear');
+  if (clear.hidden || clear.classList.contains('closing')) return;
+  clear.classList.add('closing');
+  closing = setTimeout(() => {
+    clear.hidden = true;
+    clear.classList.remove('closing');
+  }, 160);
+}
 
 // A stage that is over without a clear (game.stuck): a clocked stage where nothing
 // left can leave starts over; with every heart lost, Game Over!, or one heart more for
@@ -1650,6 +1695,7 @@ const showNoHearts = () =>
         game.hearts = 1;
         game.stuck = false;
         drawHearts();
+        replay($('hearts'), 'bump');
         closeCard();
       },
     },
@@ -1667,8 +1713,10 @@ function showClear() {
   const last = inWorld && game.stage === w.stages.length;
   const parts = {
     title: last ? `${shortName(game.world)} 완료!` : '스테이지 클리어!',
+    celebrate: true,
     next: { text: !inWorld ? '새 퍼즐' : last ? '처음부터' : '다음 스테이지', then: nextStage },
   };
+  const coins = wallet.coins;
   if (inWorld && game.autoSolved) {
     parts.note = '자동 풀이로 깬 스테이지는 기록하지 않아요';
   } else if (inWorld) {
@@ -1690,12 +1738,42 @@ function showClear() {
       text: '광고 보면 두 배!',
       then: () => {
         game.adWatched = true;
+        const before = wallet.coins;
         earn(won);
-        showCard({ ...parts, won: 2 * won, has: wallet.coins, ad: null });
+        showCard({ ...parts, won: 2 * won, wonFrom: won, has: wallet.coins, ad: null });
+        payOut(before, $('card').querySelector('.reward'));
       },
     };
   }
   showCard(parts);
+  // Once the card is up, the coins fly from it to the bar, and rewards from the climb
+  // to theirs.
+  if (wallet.coins > coins || parts.climb?.got.length)
+    setTimeout(() => {
+      if (wallet.coins > coins) payOut(coins, $('card').querySelector('.reward'));
+      for (const [kind, n] of parts.climb?.got ?? []) {
+        if (kind !== 'coins') fly(ICON[kind], $('card').querySelector('.climb-won'), $(kind === 'hint' ? 'hintBtn' : 'eraserBtn'), { n: Math.min(n, 3), size: 30, land: () => replay($(kind === 'hint' ? 'hintBtn' : 'eraserBtn'), 'bump') });
+      }
+    }, 520);
+}
+
+// Coins paid out fly from where they came (an element or a point) to the coins showing
+// (the shop page's, the home screen's or the bar's), whose number counts up from
+// `before` as they land.
+function payOut(before, from) {
+  const pill = [$('shopCoins'), $('homeCoins'), $('coins')].find((el) => el.getClientRects().length);
+  const n = pill?.querySelector('.n');
+  if (!pill || !from || !n) return;
+  const after = wallet.coins;
+  n.textContent = digits(before);
+  const many = Math.min(8, 3 + Math.floor(Math.log2(1 + (after - before) / 40)));
+  fly(ICON.coin, from, pill, {
+    n: many,
+    land: (last) => {
+      replay(pill, 'bump');
+      if (last) countUp(n, before, after, 450, digits);
+    },
+  });
 }
 
 // A country stage cleared: its points up the climb (economy.js climbPoints), the
@@ -1722,6 +1800,7 @@ function showTutorialDone() {
   $('guide').hidden = true;
   showCard({
     title: '튜토리얼 완료!',
+    celebrate: true,
     note: WORLDS[game.world].tier ? '6스테이지부터는 하트가 있어요. 막힌 화살표를 누를 때마다 하나씩 줄어요.' : '',
     next: { text: '1스테이지 시작', then: nextStage },
   });
@@ -1766,7 +1845,7 @@ const rewardText = (kind, n) => (kind === 'coins' ? `+${digits(n)}코인` : `${k
 // not in a tutorial or the generator, and not while picking what to erase), the home
 // screen and the shop. An item with none kept shows its price.
 function showWallet() {
-  const coins = `${ICON.coin}${digits(wallet.coins)}`;
+  const coins = `${ICON.coin}<span class="n">${digits(wallet.coins)}</span>`;
   const tag = (n, price) => (n ? `<b>${n}</b>` : `<span class="cost">${ICON.coin}${price}</span>`);
   $('coins').innerHTML = $('homeCoins').innerHTML = $('shopCoins').innerHTML = coins;
   $('hintBtn').innerHTML = `${ICON.hint}힌트 ${tag(wallet.hint, PRICE.hint)}`;
@@ -1862,6 +1941,8 @@ function erase(ar) {
   wallet.eraser--;
   saveWallet(wallet);
   game.moved = true;
+  const at = tapSpot(ar.cells.at(-1));
+  if (at) sparkle(at, 9);
   remove(puz, state, ar.index);
   game.remaining--;
   // It thins away where it lay.
@@ -1895,14 +1976,18 @@ function renderShop() {
     b.disabled = off;
     return b;
   };
-  const rows = ['hint', 'eraser'].map((item) =>
-    row(ICON[item], item === 'hint' ? '힌트' : '지우개', `${wallet[item]}개`, press('', `${ICON.coin}${PRICE[item]}`, () => buy(item), wallet.coins < PRICE[item])),
-  );
+  // Bought for coins, the item's count bumps.
+  const buyHere = (item) => buy(item) && replay(list.querySelector(`[data-item="${item}"] .own`), 'bump');
+  const rows = ['hint', 'eraser'].map((item) => {
+    const r = row(ICON[item], item === 'hint' ? '힌트' : '지우개', `${wallet[item]}개`, press('', `${ICON.coin}${PRICE[item]}`, () => buyHere(item), wallet.coins < PRICE[item]));
+    r.dataset.item = item;
+    return r;
+  });
   list.replaceChildren(...rows);
   if (canSell()) {
     const packs = node('div', 'packs');
     PACKS.forEach((p, i) => {
-      const b = press('pack', `${p.bonus ? `<span class="bonus">+${p.bonus}%</span>` : ''}<span class="pk">${ICON.packs[i]}</span><b>${digits(p.coins)}</b><span class="won">${priceOf(p.id) ?? `${digits(p.won)}원`}</span>`, () => purchase(p.id), !!buying);
+      const b = press(`pack${buying === p.id ? ' buying' : ''}`, `${p.bonus ? `<span class="bonus">+${p.bonus}%</span>` : ''}<span class="pk">${ICON.packs[i]}</span><b>${digits(p.coins)}</b><span class="won">${priceOf(p.id) ?? `${digits(p.won)}원`}</span>`, () => purchase(p.id), !!buying);
       b.setAttribute('aria-label', `${digits(p.coins)}코인`);
       packs.append(b);
     });
@@ -1924,12 +2009,17 @@ async function purchase(id) {
   renderShop();
   if (how === 'failed') say('결제를 하지 못했어요');
 }
-// What a purchase brings (billing.js): coins once per transaction, or no more ads.
+// What a purchase brings (billing.js): coins once per transaction, flying from the pack
+// bought (or the middle of the screen) in a burst of confetti; or no more ads.
 function paidCoins(coins, tx) {
   if (wallet.paid.includes(tx)) return;
   wallet.paid = [...wallet.paid, tx].slice(-50);
+  const before = wallet.coins;
+  const from = spot($('shopList').querySelector('.pack.buying') ?? { x: innerWidth / 2, y: innerHeight / 2 });
   earn(coins);
   say(rewardText('coins', coins));
+  confetti(from, 28);
+  payOut(before, from);
 }
 function paidNoAds() {
   if (wallet.noAds) return;
@@ -1947,17 +2037,24 @@ function openShopPage() {
 const closeShopPage = () => ($('shopPage').hidden = true);
 
 // The home screen's tabs (2026-11-03): the shop, the worlds (with the daily gift's box)
-// and the climb.
+// and the climb. A tab picked slides in from its side, its button popping up.
+const TABS = { shop: ['tabShop', 'shopTab'], home: ['tabHome', 'homeBody'], climb: ['tabClimb', 'climbTab'] };
+let tabOn = 'home';
 function showTab(tab) {
-  const on = { shop: 'tabShop', home: 'tabHome', climb: 'tabClimb' };
-  for (const [t, id] of Object.entries(on)) $(id).classList.toggle('on', t === tab);
-  $('homeBody').hidden = tab !== 'home';
+  const order = Object.keys(TABS);
+  const turn = Math.sign(order.indexOf(tab) - order.indexOf(tabOn));
+  tabOn = tab;
+  for (const [t, [button, pane]] of Object.entries(TABS)) {
+    $(button).classList.toggle('on', t === tab);
+    $(pane).hidden = t !== tab;
+  }
   $('giftBtn').hidden = tab !== 'home';
-  $('shopTab').hidden = tab !== 'shop';
-  $('climbTab').hidden = tab !== 'climb';
   if (tab === 'home') layoutOrbs();
   if (tab === 'shop') $('shopTab').append($('shopList'));
   if (tab === 'climb') renderClimb();
+  if (!turn) return;
+  replay($(TABS[tab][0]).querySelector('i'), 'pop');
+  if (!calm) $(TABS[tab][1]).animate([{ transform: `translateX(${turn * 56}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
 }
 
 // Today on this device, 'YYYY-MM-DD'.
@@ -1981,8 +2078,11 @@ function openGift() {
   });
   showCard({ close: true, icon: 'gift', title: '출석 보상', body: days, next: { text: ready ? '받기' : '내일 또 받아요', off: !ready, then: takeGift } });
 }
+// Taking it: confetti from today's square, and coins fly from it to the wallet.
 function takeGift() {
   if (!giftReady(wallet.gift, today())) return;
+  const from = spot($('card').querySelector('.day.now') ?? $('giftBtn'));
+  const before = wallet.coins;
   const [kind, n] = GIFTS[giftDay(wallet.gift)];
   give(kind, n);
   wallet.gift = { n: wallet.gift.n + 1, last: today() };
@@ -1991,6 +2091,8 @@ function takeGift() {
   showGift();
   closeCard();
   say(rewardText(kind, n));
+  confetti(from, 24);
+  if (kind === 'coins') payOut(before, from);
 }
 
 // The climb's season is the month: a new one starts its points over (the clears in a
@@ -1998,23 +2100,67 @@ function takeGift() {
 function newSeason() {
   const season = today().slice(0, 7);
   if (wallet.climb.season === season) return;
-  wallet.climb = { season, points: 0, row: wallet.climb.row };
+  wallet.climb = { season, points: 0, row: wallet.climb.row, seen: 0 };
   saveWallet(wallet);
 }
 // The 이벤트 tab: the season and the days it has left, its points, how points are scored,
-// and the climb (climb.js) with the cube in view.
+// and the climb (climb.js) with the cube in view. Points scored since the tab last showed
+// walk the cube up to where they reach.
 function renderClimb() {
   newSeason();
-  const [y, m] = wallet.climb.season.split('-').map(Number);
+  const c = wallet.climb;
+  const [y, m] = c.season.split('-').map(Number);
   const left = Math.round((new Date(y, m, 1) - new Date(new Date().toDateString())) / 86400000);
   $('climbSeason').textContent = `${m}월 시즌`;
   $('climbLeft').textContent = `${left}일 남음`;
-  $('climbPoints').innerHTML = `${ICON.flag}${digits(wallet.climb.points)}`;
+  $('climbPoints').innerHTML = `${ICON.flag}<span class="n">${digits(c.points)}</span>`;
   $('climbRules').innerHTML = `<span>${ICON.check}깨면 10</span><span>${ICON.flame}연속 +10</span><span>${ICON.heart}하트 +10</span>`;
-  const { svg, y: at } = climbArt(wallet.climb.points);
+  const { svg, y: at } = climbArt(c.points);
   const scroll = $('climbScroll');
   scroll.innerHTML = svg;
   scroll.scrollTop = (at * scroll.clientWidth) / CLIMB_W - scroll.clientHeight * 0.55;
+  if (c.seen < c.points && !calm) climbFrom(c.seen, c.points);
+  c.seen = c.points;
+  saveWallet(wallet);
+}
+// The cube walks up the path from `from` points to `to`, hopping, with the path behind
+// it drawn in, the view following, the points counting, and each reward it passes ticked
+// with a pop.
+function climbFrom(from, to) {
+  const scroll = $('climbScroll');
+  const svg = scroll.querySelector('svg');
+  const trail = svg.querySelector('.walked');
+  const cube = svg.querySelector('.climber');
+  const lengthAt = (points) => {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', climbTrail(points));
+    svg.append(p);
+    const l = p.getTotalLength();
+    p.remove();
+    return l;
+  };
+  const total = trail.getTotalLength();
+  const start = from > 0 ? lengthAt(from) : 0;
+  const stops = [...svg.querySelectorAll('.stop')]
+    .filter((s) => s.dataset.i >= Math.floor(from / CLIMB_STEP) && s.dataset.i < Math.floor(to / CLIMB_STEP))
+    .map((s) => (s.classList.add('fresh'), [s, lengthAt((+s.dataset.i + 1) * CLIMB_STEP)]));
+  trail.style.strokeDasharray = `${total} ${total}`;
+  countUp($('climbPoints').querySelector('.n'), from, to, 1200, digits);
+  const k = scroll.clientWidth / CLIMB_W;
+  const ms = Math.min(2400, 1000 + (to - from) * 3);
+  const hops = Math.max(2, Math.round((total - start) / 60));
+  const t0 = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / ms);
+    const l = start + (total - start) * (1 - (1 - t) ** 3);
+    const p = trail.getPointAtLength(l);
+    cube.setAttribute('transform', `translate(${p.x.toFixed(1)} ${(p.y - Math.abs(Math.sin(t * Math.PI * hops)) * 9 * (1 - t)).toFixed(1)})`);
+    trail.style.strokeDashoffset = `${total - l}`;
+    scroll.scrollTop = p.y * k - scroll.clientHeight * 0.55;
+    for (const [s, at] of stops) if (l >= at - 0.5 && !s.classList.contains('pop')) s.classList.replace('fresh', 'pop');
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 // A few words in the middle of the screen for a moment.
@@ -2123,6 +2269,7 @@ function worldOrb(key, locked = false) {
   const n = w.stages.length;
   const done = clearedCount(progress, key);
   const orb = node('button', `world-orb${game.playing && key === game.world ? ' current' : ''}${locked ? ' locked' : ''}`);
+  orb.style.setProperty('--bob', `${(-Math.random() * 4.4).toFixed(2)}s`); // the orbs bob out of step
   const ball = node('span', 'orb-ball');
   ball.style.background = themeOf(key).background;
   ball.innerHTML = scenery(key, 375, 812).replace('viewBox="0 0 375 812"', 'viewBox="0 470 375 342" preserveAspectRatio="xMidYMax slice"');

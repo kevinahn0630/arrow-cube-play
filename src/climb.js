@@ -80,12 +80,22 @@ function backdrop() {
 }
 const BACKDROP = backdrop();
 
+// The path walked to `points`, as Béziers ending where the cube stands.
+function walkedTo(points) {
+  const reached = Math.min(CLIMB.length, Math.floor(points / CLIMB_STEP));
+  return [...SEGS.slice(0, reached), ...(reached < SEGS.length ? [cut(SEGS[reached], (points - reached * CLIMB_STEP) / CLIMB_STEP)] : [])];
+}
+// That path as SVG path data (game.js measures it to walk the cube up).
+export const climbTrail = (points) => pathOf(walkedTo(points));
+
 // The picture with `points` reached: the path walked so far in the accent colour, each
 // reward passed ticked, the next one ringed, and the cube with the points still to go.
-// Returns it with the cube's height in the picture, to scroll it into view.
+// Returns it with the cube's height in the picture, to scroll it into view. The walked
+// path (.walked), the stops (.stop, each with its .ring and, once passed, its .tick) and
+// the cube (.climber) are marked for game.js to animate.
 export function climbArt(points) {
   const reached = Math.min(CLIMB.length, Math.floor(points / CLIMB_STEP));
-  const walked = [...SEGS.slice(0, reached), ...(reached < SEGS.length ? [cut(SEGS[reached], (points - reached * CLIMB_STEP) / CLIMB_STEP)] : [])];
+  const walked = walkedTo(points);
   const here = walked.at(-1)[3];
   const stops = STOPS.map(([x, y], i) => {
     const r = i % 5 === 4 ? 27 : 22; // the last stop of each zone is bigger
@@ -94,23 +104,23 @@ export function climbArt(points) {
     const dark = y < H / 2;
     const [kind, n] = CLIMB[i];
     const label = kind === 'coins' ? n.toLocaleString('ko-KR') : n > 1 ? `×${n}` : '';
-    return `<g transform="translate(${f1(x)} ${f1(y)})">
+    return `<g class="stop" data-i="${i}" transform="translate(${f1(x)} ${f1(y)})">
       ${next ? `<circle r="${r + 8}" fill="none" stroke="#e2786a" stroke-opacity="0.35" stroke-width="3"/>` : ''}
-      <circle r="${r}" fill="#fff" fill-opacity="${got || next || !dark ? 1 : 0.88}" stroke="${got || next ? '#e2786a' : '#f0dcd8'}" stroke-width="${next ? 3 : 2.2}"/>
+      <circle class="ring" r="${r}" fill="#fff" fill-opacity="${got || next || !dark ? 1 : 0.88}" stroke="${got || next ? '#e2786a' : '#f0dcd8'}" stroke-width="${next ? 3 : 2.2}"/>
       ${place(rewardIcon(kind), -r * 0.62, -r * 0.62, f1(r * 1.24))}
-      ${got ? `<circle cx="${f1(r * 0.72)}" cy="${f1(-r * 0.72)}" r="8" fill="#e2786a"/><path d="M${f1(r * 0.72 - 3.6)} ${f1(-r * 0.72)}l2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+      ${got ? `<g class="tick"><circle cx="${f1(r * 0.72)}" cy="${f1(-r * 0.72)}" r="8" fill="#e2786a"/><path d="M${f1(r * 0.72 - 3.6)} ${f1(-r * 0.72)}l2.4 2.4 4.6-4.8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>` : ''}
       ${label ? `<text y="${r + 15}" text-anchor="middle" font-size="12" font-weight="800" fill="${dark ? '#fff' : '#5a4862'}">${label}</text>` : ''}
     </g>`;
   }).join('');
   const toGo = reached < CLIMB.length ? `다음까지 ${(reached + 1) * CLIMB_STEP - points}` : '';
   const flip = here[0] > W - 130; // the note goes on the side with room
-  const cube = `<g transform="translate(${f1(here[0])} ${f1(here[1])})">
+  const cube = `<g class="climber" transform="translate(${f1(here[0])} ${f1(here[1])})">
       <use href="#cubeLogo" x="-17" y="-38" width="34" height="41"/>
       ${toGo ? `<g transform="translate(${flip ? -110 : 26} -26)"><rect y="-13" width="84" height="26" rx="13" fill="#fff"/><text x="42" y="4.5" text-anchor="middle" font-size="12" font-weight="800" fill="#e2786a">${toGo}</text></g>` : ''}
     </g>`;
   const svg = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${BACKDROP}
     <path d="${pathOf(SEGS)}" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 11" opacity="0.95"/>
-    ${points > 0 ? `<path d="${pathOf(walked)}" fill="none" stroke="#e2786a" stroke-width="5" stroke-linecap="round"/>` : ''}
+    ${points > 0 ? `<path class="walked" d="${pathOf(walked)}" fill="none" stroke="#e2786a" stroke-width="5" stroke-linecap="round"/>` : ''}
     ${stops}${cube}</svg>`;
   return { svg, y: here[1] };
 }
