@@ -3,6 +3,7 @@
 // for now (Capacitor Preferences later); every access is guarded, since storage can
 // be missing, blocked or full.
 import { WORLDS, STAR_AT, TIER_STARS } from './stages.js';
+import { START } from './economy.js';
 
 const KEY = 'arrowCube.progress.v1';
 
@@ -62,3 +63,21 @@ export function markTutorialDone(world) {
 
 // Whether a tier of countries is open: enough stars collected.
 export const tierOpen = (progress, tier) => totalStars(progress) >= TIER_STARS[tier];
+
+// The wallet: coins, hints and erasers kept, and whether the player has been told that
+// a stage cleared again pays a fifth (`told`). A new player starts with economy.js START.
+const WALLET_KEY = 'arrowCube.wallet.v1';
+export function loadWallet() {
+  try {
+    const w = JSON.parse(localStorage.getItem(WALLET_KEY));
+    if (w) return { coins: w.coins | 0, hint: w.hint | 0, eraser: w.eraser | 0, told: !!w.told };
+  } catch {}
+  return { ...START, told: false };
+}
+export function saveWallet(wallet) {
+  try {
+    localStorage.setItem(WALLET_KEY, JSON.stringify(wallet));
+  } catch {
+    // Storage full or blocked: the wallet then lasts as long as the page.
+  }
+}

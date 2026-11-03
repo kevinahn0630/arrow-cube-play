@@ -4,7 +4,10 @@ import { makeCube, generate, add, scale, cross, axisOf } from './cube.js';
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, cutBy, darkCell, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
-import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone } from './progress.js';
+import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadWallet, saveWallet } from './progress.js';
+import { coinsFor, PRICE, hintFor, erasable } from './economy.js';
+import { rewarded } from './ads.js';
+import { ICON } from './icons.js';
 import { STAGE_SEEDS } from './stage-seeds.js';
 import { TUTORIALS, tutorialParams, findTarget, lookCell } from './tutorial.js';
 import { TUTORIAL_SEEDS } from './tutorial-seeds.js';
@@ -113,9 +116,26 @@ function applyTheme(t) {
   PANEL = t.panels.map(c);
   ORN = Object.fromEntries(Object.entries(t.ornament).map(([k, v]) => [k, Array.isArray(v) ? v.map(c) : c(v)]));
   document.body.style.background = t.background;
+  nightSky = darkTop(t.background);
+  styleBars();
   box.material.color.set(t.box.face);
   box.material.opacity = t.box.faceOpacity;
   edges.material.color.set(t.box.edge);
+}
+
+// In the app, Android draws the page under the status bar, so its icons sit on the sky:
+// dark on the pastel skies and on the loading and home screens, light on the two night
+// skies. In a browser there is no Capacitor and nothing to do.
+let nightSky = false;
+function darkTop(sky) {
+  const top = /#(\w\w)(\w\w)(\w\w)/.exec(sky);
+  if (!top) return false;
+  const [r, g, b] = top.slice(1).map((hex) => parseInt(hex, 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+}
+function styleBars() {
+  const style = game.screen === 'play' && nightSky ? 'DARK' : 'LIGHT';
+  window.Capacitor?.nativePromise?.('SystemBars', 'setStyle', { style }).catch(() => {});
 }
 
 // The picture behind the cube (scenery.js) for the world whose look is on, drawn for
@@ -196,6 +216,9 @@ const game = {
   turn: null, // the camera turning to show something: { from, to, up, upTo, len, t0 }
   screen: 'splash', // what is in front: the loading screen, the home screen or the game ('play')
   playing: false, // a stage has been picked since the game started (the home screen can go back to it)
+  hint: -1, // the arrow a hint lit (economy.js hintFor), until it leaves; -1 for none
+  adHint: false, // this stage's one hint for an ad has been taken
+  erasing: false, // the eraser is out: the next tap on an arrow takes it off the cube
 };
 
 function world(p) {
@@ -737,7 +760,8 @@ function drawDecor() {
     }
   }
   // Pieces samurais have cut off: where they were, in their arrow's colour, until the
-  // samurai passes the cut, then thinning away with a white slash across the cut.
+  // samurai passes the cut, then thinning away with a white slash across the cut. An
+  // erased arrow (`wipe`) thins away at once, with no slash.
   const line = Math.min(cs * 0.085 * BOLD * game.thick, 0.04 * BOLD);
   game.pieces = game.pieces.filter((pc) => now < pc.t0 + CUT_MS);
   for (const pc of game.pieces) {
@@ -747,7 +771,7 @@ function drawDecor() {
       const c = isFacing(faceIdx(pc.pts[i].n)) ? pc.color : COLOR.back;
       strip(pos, col, world(pc.pts[i - 1].p), world(pc.pts[i].p), pc.pts[i].n, line * (1 - u), eps, c, line * (1 - u), line * (1 - u));
     }
-    if (now < pc.t0) continue;
+    if (now < pc.t0 || pc.wipe) continue;
     const info = cellInfo(pc.cell);
     const slant = info.u.clone().add(info.v).normalize().multiplyScalar(cs * 0.48);
     strip(pos, col, info.C.clone().sub(slant), info.C.clone().add(slant), info.n, cs * 0.05 * (1 - u), eps * 1.8, tint(info.face, WHITE));
@@ -1011,6 +1035,9 @@ function load(params) {
   game.stuck = false;
   game.tut = null;
   game.turn = null;
+  game.hint = -1;
+  game.adHint = false;
+  game.erasing = false;
   $('guide').hidden = true;
   game.heartsMax = game.hearts = params.hearts ?? 0;
   syncPanel(params);
@@ -1018,6 +1045,7 @@ function load(params) {
   redrawAll();
   hud();
   drawHearts();
+  showWallet();
   $('clear').hidden = true;
 }
 
@@ -1046,6 +1074,8 @@ function tap(ar) {
   if (!ar || ar.state === 'exiting' || ar.state === 'gone') return;
   // With no hearts left the stage is over.
   if (game.heartsMax && game.hearts <= 0) return;
+  // With the eraser out, the tap picks what to erase.
+  if (game.erasing) return erase(ar);
   // A tutorial step about one arrow takes taps on that one only.
   if (!tutAllows(ar)) return nudgeGuide();
   const { puz, state } = game;
@@ -1068,26 +1098,8 @@ function tap(ar) {
       }
     }
     playLeave(out.length);
-    refreshFree();
-    // A lantern leaving lights up the arrows round it.
-    if (game.showFree || out.some((a) => a.lantern)) redrawAll();
-    if (puz.walls || puz.panels || cut || puz.gimmick === 'ice' || out.some((a) => a.gates.length || a.tint >= 0 || a.disc)) drawDecor();
-    hud();
+    settle(out, cut);
     tutDid('leave', ar.index);
-    // A clocked switch has moved on: the shadows, guards and dial arrows follow, and
-    // if nothing can leave now the stage is stuck for good.
-    if (clocked(puz)) {
-      for (const a of game.arrows) {
-        if (a.dial < 0 || (a.state !== 'idle' && a.state !== 'bumping')) continue;
-        // A dial arrow still bouncing back from a bump stops short and turns with the rest.
-        Object.assign(a, { state: 'idle', s: a.rest });
-        seat(a);
-      }
-      refreshFree();
-      redrawAll();
-      const alive = game.arrows.filter((a) => a.state === 'idle' || a.state === 'bumping').map((a) => a.index);
-      if (deadEnd(puz, state, alive)) game.solveTimer = setTimeout(showStuck, 700);
-    }
     return;
   }
   // A bull with room ahead charges up to whatever is in its way.
@@ -1115,6 +1127,32 @@ function tap(ar) {
   playBump();
   loseHeart();
   tutDid('bump', ar.index);
+}
+
+// After arrows have left the cube (`out`; with a samurai's `cut`): which can leave now,
+// the decor that changed and the count; on a clocked stage the switch has moved on, so
+// the shadows, guards and dial arrows follow, and if nothing can leave now the stage is
+// stuck for good. A hint's arrow that can no longer leave goes dark.
+function settle(out, cut = null) {
+  const { puz, state } = game;
+  refreshFree();
+  // A lantern leaving lights up the arrows round it.
+  if (game.showFree || out.some((a) => a.lantern)) redrawAll();
+  if (puz.walls || puz.panels || cut || puz.gimmick === 'ice' || out.some((a) => a.gates.length || a.tint >= 0 || a.disc)) drawDecor();
+  hud();
+  if (clocked(puz)) {
+    for (const a of game.arrows) {
+      if (a.dial < 0 || (a.state !== 'idle' && a.state !== 'bumping')) continue;
+      // A dial arrow still bouncing back from a bump stops short and turns with the rest.
+      Object.assign(a, { state: 'idle', s: a.rest });
+      seat(a);
+    }
+    refreshFree();
+    redrawAll();
+    const alive = game.arrows.filter((a) => a.state === 'idle' || a.state === 'bumping').map((a) => a.index);
+    if (deadEnd(puz, state, alive)) game.solveTimer = setTimeout(showStuck, 700);
+  }
+  if (game.hint >= 0 && !game.arrows[game.hint].free) game.hint = -1;
 }
 
 // A wrong tap costs a heart on stages that have them; with none left, the card says
@@ -1149,20 +1187,25 @@ function seat(ar) {
 // + 1 cells from its tail) is left to drawDecor, to stay where it was until the
 // samurai's head gets there (k cells along its way) and then drop away.
 function slash(x, { at, k }) {
-  const C = game.puz.cube.cells;
   const piece = x.cells.slice(0, at + 1);
-  // Points along the piece, each with the face the stretch up to it lies on; over a
-  // cube edge, a point on the edge as well.
-  const pts = [];
-  piece.forEach((id, i) => {
-    const prev = C[piece[i - 1]];
-    if (i && faceIdx(prev.n) !== faceIdx(C[id].n)) pts.push({ p: add(prev.p, C[id].n), n: prev.n });
-    pts.push({ p: C[id].p, n: C[id].n });
-  });
-  game.pieces.push({ pts, color: colorOf(x, faceIdx(C[piece[0]].n)), cell: piece.at(-1), t0: performance.now() + (2000 * (k + 1)) / SPEED });
+  game.pieces.push({ ...pieceOf(x, piece), t0: performance.now() + (2000 * (k + 1)) / SPEED });
   x.cells = x.cells.slice(at + 1);
   x.track = buildTrack(game.puz.cube, x);
   drawArrow(x);
+}
+
+// The line through cells of arrow x, for drawDecor to thin away: points along it, each
+// with the face the stretch up to it lies on (over a cube edge, a point on the edge as
+// well), in the arrow's colour.
+function pieceOf(x, cells) {
+  const C = game.puz.cube.cells;
+  const pts = [];
+  cells.forEach((id, i) => {
+    const prev = C[cells[i - 1]];
+    if (i && faceIdx(prev.n) !== faceIdx(C[id].n)) pts.push({ p: add(prev.p, C[id].n), n: prev.n });
+    pts.push({ p: C[id].p, n: C[id].n });
+  });
+  return { pts, color: colorOf(x, faceIdx(C[cells[0]].n)), cell: cells.at(-1) };
 }
 
 const raycaster = new THREE.Raycaster();
@@ -1293,6 +1336,7 @@ function loadTutorial(world) {
   camera.up.set(0, 1, 0);
   game.tut = { steps: TUTORIALS[world].steps, k: 0, targets: [], focus: -1, wait: false };
   $('guide').style.setProperty('--accent', themeOf(world).accent);
+  showWallet();
   tutStep(0);
 }
 
@@ -1384,11 +1428,11 @@ function turnCamera(now) {
   if (u >= 1) game.turn = null;
 }
 
-// The tutorial's lit arrow glows and pulses.
+// The tutorial's lit arrow, or a hint's, glows and pulses.
 function drawGlow(now) {
-  const tut = game.tut;
-  const ar = tut && tut.focus >= 0 ? game.arrows[tut.focus] : null;
-  const lit = ar && (ar.state === 'idle' || ar.state === 'bumping' || ar.state === 'charging') ? ar : null;
+  const i = game.tut ? game.tut.focus : game.hint;
+  const ar = i >= 0 ? game.arrows[i] : null;
+  const lit = ar &&(ar.state === 'idle' || ar.state === 'bumping' || ar.state === 'charging') ? ar : null;
   glow.visible = !!lit;
   if (!lit) return;
   const pulse = 0.5 + 0.5 * Math.sin(now / 170);
@@ -1487,41 +1531,137 @@ function hud() {
   $('remain').textContent = game.remaining;
 }
 
-// A stage that is over without a clear: the same card says why and offers to start over.
-function showOver(title, why) {
-  if (game.cleared) return;
-  game.stuck = true;
-  $('clearTitle').textContent = title;
-  $('clearStars').textContent = why;
-  $('clearNext').textContent = '처음부터 다시';
+// The card over the stage, holding top to bottom what `parts` names: a close button,
+// an icon (an ICON key), the title and a line under it, coins `won` (+n), a coin price to
+// `pay` (or nothing if the wallet is short), the coins the player `has`, a `tip`, an
+// `ad` for a reward (in the bottom row if `primary`) and the bottom row: a round
+// `restart` button and the `next` step. Words are kept few (2026-11-03 user request).
+function showCard({ close, icon, title, note, won, pay, has, tip, ad, restart, next }) {
+  const card = $('card');
+  const button = (cls, html, onclick) => {
+    const b = node('button', cls);
+    b.innerHTML = html;
+    b.onclick = onclick;
+    return b;
+  };
+  card.replaceChildren();
+  if (close) card.append(button('close-x', ICON.close, closeCard));
+  if (icon) {
+    const ic = node('div', `badge-ic ${icon}`);
+    ic.innerHTML = ICON[icon];
+    card.append(ic);
+  }
+  card.append(node('h2', '', title));
+  if (note) card.append(node('p', 'clear-stars', note));
+  if (won !== undefined) {
+    const r = node('div', 'reward');
+    r.innerHTML = `${ICON.coin}+${won}`;
+    card.append(r);
+  }
+  if (pay) {
+    const b = button('primary pay', `${ICON.coin}<span>${pay.price}</span>`, pay.then);
+    b.disabled = wallet.coins < pay.price;
+    card.append(b);
+  }
+  if (has !== undefined) card.append(node('p', 'have', `${digits(has)}코인`));
+  if (tip) {
+    const t = node('p', 'tip');
+    t.innerHTML = `${ICON.info}<span>${tip}</span>`;
+    card.append(t);
+  }
+  // An ad's reward comes once it has been watched; a button pressed once does not take another.
+  const adButton = (cls) => {
+    const b = button(cls, `${ICON.ad}<span>${ad.text}</span>`, async () => {
+      b.disabled = true;
+      const how = await rewarded();
+      if (how === 'earned') return ad.then();
+      b.disabled = false;
+      if (how === 'failed') say('광고를 불러오지 못했어요');
+    });
+    return b;
+  };
+  if (ad && !ad.primary) card.append(adButton('ad'));
+  if (restart || next || ad?.primary) {
+    const row = node('div', 'row-btns');
+    if (restart) {
+      const b = button('restart', ICON.restart, restart);
+      b.setAttribute('aria-label', '재시작');
+      row.append(b);
+    }
+    if (ad?.primary) row.append(adButton('primary ad'));
+    if (next) row.append(button('primary wide', next.text, next.then));
+    card.append(row);
+  }
   $('clear').hidden = false;
 }
-// A clocked stage where nothing left can leave.
-const showStuck = () => showOver('막혔어요', '지금 상태로는 나갈 수 있는 화살표가 없어요');
-// Every heart lost to wrong taps.
-const showNoHearts = () => showOver('하트를 다 썼어요', '막힌 화살표를 누를 때마다 하트가 하나씩 줄어요');
+const closeCard = () => ($('clear').hidden = true);
 
-// The clear card. A world stage cleared by hand is recorded; the card says where the
-// world stands, and when a star was just earned.
+// A stage that is over without a clear (game.stuck): a clocked stage where nothing
+// left can leave starts over; with every heart lost, Game Over!, or one heart more for
+// an ad.
+function showOver(parts) {
+  if (game.cleared) return;
+  game.stuck = true;
+  stopErase();
+  showCard(parts);
+}
+const showStuck = () => showOver({ title: '막혔어요', note: '지금 상태로는 나갈 수 있는 화살표가 없어요', next: { text: '처음부터 다시', then: restart } });
+const showNoHearts = () =>
+  showOver({
+    icon: 'heart',
+    title: 'Game Over!',
+    restart,
+    ad: {
+      text: '하트 하나 더!',
+      primary: true,
+      then: () => {
+        game.hearts = 1;
+        game.stuck = false;
+        drawHearts();
+        closeCard();
+      },
+    },
+  });
+
+// The clear card. A world stage cleared by hand is recorded and pays its coins
+// (economy.js coinsFor; a fifth if it was cleared before), which an ad doubles once; the
+// card says where the world stands, and when a star was just earned. That a stage
+// cleared again pays a fifth is told once: on 집 안's first stage, or the first time it
+// happens.
 function showClear() {
   if (game.tut) return showTutorialDone();
   const inWorld = game.world !== 'free';
   const w = WORLDS[game.world];
   const last = inWorld && game.stage === w.stages.length;
-  let note = '';
+  const parts = {
+    title: last ? `${shortName(game.world)} 완료!` : '스테이지 클리어!',
+    next: { text: !inWorld ? '새 퍼즐' : last ? '처음부터' : '다음 스테이지', then: nextStage },
+  };
   if (inWorld && game.autoSolved) {
-    note = '자동 풀이로 깬 스테이지는 기록하지 않아요';
+    parts.note = '자동 풀이로 깬 스테이지는 기록하지 않아요';
   } else if (inWorld) {
+    const again = isCleared(progress, game.world, game.stage);
     const before = starsOf(progress, game.world);
     markCleared(progress, game.world, game.stage);
     const stars = starsOf(progress, game.world);
-    note = `${w.tier ? `${starText(stars)} · ` : ''}${clearedCount(progress, game.world)} / ${w.stages.length} 클리어`;
-    if (stars > before) note += ' · 별을 얻었어요!';
+    parts.note = `${w.tier ? `${starText(stars)} · ` : ''}${clearedCount(progress, game.world)} / ${w.stages.length} 클리어`;
+    if (stars > before) parts.note += ' · 별을 얻었어요!';
+    const won = coinsFor(game.world, game.stage, again);
+    if (!wallet.told && (again || (game.world === 'home' && game.stage === 1))) {
+      wallet.told = true;
+      parts.tip = '다시 깬 스테이지는 코인 1/5';
+    }
+    earn(won);
+    Object.assign(parts, { won, has: wallet.coins });
+    parts.ad = {
+      text: '광고 보면 두 배!',
+      then: () => {
+        earn(won);
+        showCard({ ...parts, won: 2 * won, has: wallet.coins, ad: null });
+      },
+    };
   }
-  $('clearTitle').textContent = last ? `${shortName(game.world)} 완료!` : '스테이지 클리어!';
-  $('clearStars').textContent = note;
-  $('clearNext').textContent = !inWorld ? '새 퍼즐' : last ? '처음부터' : '다음 스테이지';
-  $('clear').hidden = false;
+  showCard(parts);
 }
 
 // A tutorial played through: noted on the device, so stage 1 opens from now on. A
@@ -1529,12 +1669,173 @@ function showClear() {
 function showTutorialDone() {
   if (!game.autoSolved) markTutorialDone(game.world);
   $('guide').hidden = true;
-  $('clearTitle').textContent = '튜토리얼 완료!';
-  $('clearStars').textContent = WORLDS[game.world].tier
-    ? '6스테이지부터는 하트가 있어요. 막힌 화살표를 누를 때마다 하나씩 줄고, 다 쓰면 처음부터 다시 해요.'
-    : '';
-  $('clearNext').textContent = '1스테이지 시작';
-  $('clear').hidden = false;
+  showCard({
+    title: '튜토리얼 완료!',
+    note: WORLDS[game.world].tier ? '6스테이지부터는 하트가 있어요. 막힌 화살표를 누를 때마다 하나씩 줄어요.' : '',
+    next: { text: '1스테이지 시작', then: nextStage },
+  });
+}
+
+// The card's next step: the next stage (from the last, the first again), or a new
+// puzzle in the generator.
+function nextStage() {
+  if (game.world === 'free') {
+    $('seed').value = Number($('seed').value) + 1;
+    return loadCustom();
+  }
+  loadStage(game.world, game.stage === WORLDS[game.world].stages.length ? 1 : game.stage + 1);
+}
+
+// ---------- coins and items
+
+// The wallet (progress.js): coins, and the hints and erasers kept.
+const wallet = loadWallet();
+const digits = (n) => n.toLocaleString('ko-KR');
+function earn(coins) {
+  wallet.coins += coins;
+  saveWallet(wallet);
+  showWallet();
+}
+
+// The coins and items wherever they show: the bar under the cube (in a world's stages,
+// not in a tutorial or the generator, and not while picking what to erase), the home
+// screen and the shop. An item with none kept shows its price.
+function showWallet() {
+  const coins = `${ICON.coin}${digits(wallet.coins)}`;
+  const tag = (n, price) => (n ? `<b>${n}</b>` : `<span class="cost">${ICON.coin}${price}</span>`);
+  $('coins').innerHTML = $('homeCoins').innerHTML = coins;
+  $('hintBtn').innerHTML = `${ICON.hint}힌트 ${tag(wallet.hint, PRICE.hint)}`;
+  $('eraserBtn').innerHTML = `${ICON.eraser}지우개 ${tag(wallet.eraser, PRICE.eraser)}`;
+  $('items').hidden = game.world === 'free' || !!game.tut || game.erasing;
+  $('eraseBar').hidden = !game.erasing;
+  $('shopCoins').innerHTML = `${coins}코인`;
+  $('shopHint').textContent = `${wallet.hint}개`;
+  $('shopEraser').textContent = `${wallet.eraser}개`;
+  for (const item of ['hint', 'eraser']) {
+    const b = $(item === 'hint' ? 'buyHint' : 'buyEraser');
+    b.innerHTML = `${ICON.coin}${PRICE[item]}`;
+    b.disabled = wallet.coins < PRICE[item];
+  }
+}
+
+// Buys one of an item for coins.
+function buy(item) {
+  if (wallet.coins < PRICE[item]) return false;
+  wallet.coins -= PRICE[item];
+  wallet[item]++;
+  saveWallet(wallet);
+  showWallet();
+  return true;
+}
+
+// Out of an item: the card offers one for coins, used at once, and a hint once a stage
+// for an ad.
+function offer(item) {
+  const use = item === 'hint' ? useHint : startErase;
+  showCard({
+    close: true,
+    icon: item,
+    title: item === 'hint' ? '힌트가 없어요' : '지우개가 없어요',
+    pay: { price: PRICE[item], then: () => buy(item) && (closeCard(), use()) },
+    has: wallet.coins,
+    ad:
+      item === 'hint' && !game.adHint
+        ? {
+            text: '광고 보면 1개!',
+            then: () => {
+              game.adHint = true;
+              closeCard();
+              lightHint();
+            },
+          }
+        : null,
+  });
+}
+
+// Items work in a world's stages while they are being played.
+const playingStage = () => game.world !== 'free' && !game.tut && !game.cleared && !game.stuck;
+
+// A hint: the arrow economy.js hintFor picks glows (as a tutorial's does) until it
+// leaves or can no longer leave, and the cube turns to show it. Tapped again while one
+// glows, the cube turns back to it for nothing.
+function useHint() {
+  if (!playingStage()) return;
+  if (game.hint >= 0) return turnTo(pose(game.puz, game.state, game.hint).cells.at(-1));
+  if (!wallet.hint) return offer('hint');
+  if (!lightHint()) return;
+  wallet.hint--;
+  saveWallet(wallet);
+  showWallet();
+}
+function lightHint() {
+  const i = hintFor(game.puz, game.state, [...aliveNow()]);
+  if (i < 0) {
+    say('지금은 뺄 수 있는 화살표가 없어요');
+    return false;
+  }
+  game.hint = i;
+  turnTo(pose(game.puz, game.state, i).cells.at(-1));
+  return true;
+}
+
+// The eraser: once out, the next tap on a plain arrow takes it off the cube, blocked or
+// not, and counts as its leaving (economy.js erasable). A gimmick arrow, or on a clocked
+// stage one whose going would leave the rest unable to finish, stays, and the note
+// under the cube says so.
+function startErase() {
+  if (!playingStage()) return;
+  if (!wallet.eraser) return offer('eraser');
+  game.erasing = true;
+  $('eraseText').textContent = '지울 화살표를 누르세요';
+  showWallet();
+}
+function stopErase() {
+  game.erasing = false;
+  showWallet();
+}
+function erase(ar) {
+  const { puz, state } = game;
+  if (ar.state === 'charging' || !erasable(puz, state, [...aliveNow()], ar.index)) {
+    $('eraseText').textContent = '이 화살표는 못 지워요';
+    shake($('eraseBar'));
+    return;
+  }
+  wallet.eraser--;
+  saveWallet(wallet);
+  remove(puz, state, ar.index);
+  game.remaining--;
+  // It thins away where it lay.
+  game.pieces.push({ ...pieceOf(ar, ar.cells), t0: performance.now(), wipe: true });
+  ar.state = 'gone';
+  scene.remove(ar.mesh);
+  ar.mesh.geometry.dispose();
+  drawDecor();
+  playLeave(1, 0.5);
+  stopErase();
+  settle([ar]);
+}
+
+// The shop, from the coins on the home screen or in the bar: one hint or eraser at a time.
+const openShop = () => {
+  showWallet();
+  $('shop').hidden = false;
+};
+const closeShop = () => ($('shop').hidden = true);
+
+// A few words in the middle of the screen for a moment.
+let sayTimer = 0;
+function say(text) {
+  $('toast').textContent = text;
+  $('toast').hidden = false;
+  clearTimeout(sayTimer);
+  sayTimer = setTimeout(() => ($('toast').hidden = true), 1600);
+}
+
+// An element shakes, as the guide box does at a tap it did not ask for.
+function shake(el) {
+  el.classList.remove('nudge');
+  void el.offsetWidth; // restart the shake
+  el.classList.add('nudge');
 }
 
 // ---------- home screen and stage menu
@@ -1574,6 +1875,7 @@ function showHome() {
   closeMenu();
   $('clear').hidden = true;
   game.screen = 'home';
+  styleBars();
   renderHome();
   $('home').hidden = false;
   layoutOrbs();
@@ -1584,6 +1886,7 @@ function play() {
   closeMenu();
   $('home').hidden = true;
   game.screen = 'play';
+  styleBars();
   game.playing = true;
 }
 
@@ -1800,22 +2103,24 @@ $('menuClose').onclick = closeMenu;
 $('menuBack').onclick = showHome;
 // A tap on the dimmed backdrop, or Escape, closes the menu.
 $('menu').onclick = (e) => e.target === $('menu') && closeMenu();
-addEventListener('keydown', (e) => e.key === 'Escape' && closeMenu());
+addEventListener('keydown', (e) => e.key === 'Escape' && (closeMenu(), closeShop()));
 
 // The generator panel's gimmick list, from the worlds (by tier).
 for (const key of [...COUNTRIES].sort((a, b) => WORLDS[a].tier - WORLDS[b].tier)) {
   $('gimmick').append(new Option(`${WORLDS[key].name} — ${WORLDS[key].about}`, key));
 }
-$('clearNext').onclick = () => {
-  if (game.stuck) {
-    restart();
-  } else if (game.world === 'free') {
-    $('seed').value = Number($('seed').value) + 1;
-    loadCustom();
-  } else {
-    loadStage(game.world, game.stage === WORLDS[game.world].stages.length ? 1 : game.stage + 1);
-  }
-};
+// Coins and items: the bar under the cube, the note while erasing, the shop.
+$('eraseIcon').innerHTML = $('shopEraserIcon').innerHTML = ICON.eraser;
+$('shopHintIcon').innerHTML = ICON.hint;
+$('eraseCancel').innerHTML = ICON.close;
+$('hintBtn').onclick = useHint;
+$('eraserBtn').onclick = startErase;
+$('eraseCancel').onclick = stopErase;
+$('coins').onclick = $('homeCoins').onclick = openShop;
+$('shopClose').onclick = closeShop;
+$('shop').onclick = (e) => e.target === $('shop') && closeShop();
+$('buyHint').onclick = () => buy('hint');
+$('buyEraser').onclick = () => buy('eraser');
 
 const zoomBy = (f) => {
   const len = THREE.MathUtils.clamp(camera.position.length() * f, controls.minDistance, controls.maxDistance);

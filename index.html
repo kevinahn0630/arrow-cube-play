@@ -144,6 +144,50 @@
   .clear-stars { margin: -8px 0 18px; font-size: 14px; color: var(--muted); }
   .clear-stars:empty { display: none; }
   .clear .clear-stars { max-width: 300px; line-height: 1.5; }
+  /* Cards (game.js showCard): the clear card with its coins, Game Over, buying an item. Buttons run the card's width. */
+  .clear { z-index: 8; }
+  .clear .card { position: relative; width: min(300px, calc(100vw - 40px)); min-width: 0; padding: 26px 24px 20px; }
+  .card .badge-ic { width: 54px; height: 54px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 50%; background: #fff4dc; color: #d9932a; }
+  .card .badge-ic svg { width: 28px; height: 28px; }
+  .card .badge-ic.heart { background: #fde6e2; color: var(--accent); }
+  .card .close-x { position: absolute; top: 10px; right: 10px; }
+  .card .reward { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 4px; font-size: 32px; font-weight: 800; color: #c98a12; }
+  .card .reward .coin { width: 30px; height: 30px; }
+  .card .have { margin: 0 0 18px; font-size: 13px; color: var(--muted); }
+  .card .tip { display: flex; align-items: center; justify-content: center; gap: 6px; width: fit-content; margin: -8px auto 16px; padding: 6px 12px; border-radius: 999px; background: #f6f0f8; font-size: 12px; font-weight: 600; color: #7c6a8c; }
+  .card .tip svg { width: 15px; height: 15px; }
+  .card .wide, .card .ad, .card .pay { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; }
+  .card .ad { margin: 0 0 10px; font-weight: 700; color: #6b4e2a; background: #fff4dc; border-color: #f4dfb2; }
+  .card .ad svg { width: 20px; height: 20px; color: #d9932a; }
+  .card .primary.ad { margin: 0; color: #fff; background: var(--accent); border-color: transparent; }
+  .card .primary.ad svg { color: #fff; }
+  .card button:disabled { opacity: 0.5; }
+  .card .pay { font-size: 17px; font-weight: 800; }
+  .card .pay .coin { width: 18px; height: 18px; }
+  .card .pay + .have { margin: 6px 0 14px; font-size: 12px; }
+  .card .row-btns { display: flex; gap: 10px; }
+  .card .row-btns .primary { flex: 1; }
+  .card .restart { width: 52px; flex: none; padding: 0; display: grid; place-items: center; background: #fff; }
+  .card .restart svg { width: 24px; height: 24px; }
+  /* Coins and items (economy.js): one bar along the bottom, between the landmarks. */
+  .coin { width: 1.05em; height: 1.05em; flex: none; vertical-align: -0.17em; }
+  .itembar { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 22px; }
+  .itembar .coins { display: flex; align-items: center; gap: 5px; height: 44px; padding: 0 9px 0 8px; border: 0; background: none; font-size: 15px; font-weight: 800; color: #5a4862; }
+  .item { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 13px 0 10px; border-radius: 16px; background: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .item svg { width: 22px; height: 22px; }
+  .item b { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: #fff; font-size: 12px; line-height: 20px; }
+  .item .cost { display: flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 800; color: #b57d14; }
+  /* Picking an arrow to erase: a note in the bar's place, like the tutorial's guide. */
+  .erasebar { position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; background: #fffffff2; border-left: 5px solid var(--accent); }
+  .erasebar .erase-ic svg { display: block; width: 24px; height: 24px; color: var(--accent); }
+  .erasebar b { flex: 1; min-width: 0; font-size: 15px; }
+  .erasebar.nudge { animation: shake 0.4s; }
+  .erasebar .x, .card .close-x { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border: 0; background: none; color: var(--muted); }
+  .erasebar .x svg, .card .close-x svg { width: 20px; height: 20px; }
+  body:not(.release) .itembar, body:not(.release) .erasebar { bottom: 72px; }
+  .itembar[hidden], .erasebar[hidden], .toast[hidden] { display: none; }
+  /* A word that comes and goes (an ad that would not load). */
+  .toast { position: fixed; left: 50%; top: 42%; transform: translateX(-50%); z-index: 30; padding: 10px 16px; font-size: 14px; font-weight: 600; white-space: nowrap; pointer-events: none; }
   /* The tutorial's guide box, under the cube. */
   .guide {
     position: fixed;
@@ -237,6 +281,20 @@
   .home-word { height: 14px; width: auto; min-width: 0; color: #5a4862; stroke-width: 10; overflow: visible; }
   .home .pill { background: #ffffffa8; border-color: #ffffffe6; box-shadow: 0 6px 16px #b48aa024; color: #5a4862; }
   .home-stars { padding: 7px 12px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .home-coins { display: flex; align-items: center; gap: 5px; padding: 7px 12px 7px 9px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .home-coins .coin { width: 18px; height: 18px; }
+  /* The shop: hints and erasers for coins, from the coins on the home screen or in the item bar. */
+  .shop .sheet { width: min(420px, 100%); }
+  .shop .sheet-title span { display: flex; align-items: center; gap: 4px; }
+  .shop-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 14px 12px 14px 14px; background: #fff; border: 1px solid var(--line); border-radius: 18px; }
+  .shop-row .ic { width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 16px; background: #fbf1ee; }
+  .shop-row .ic svg { width: 25px; height: 25px; }
+  .shop-row .tx { flex: 1; min-width: 0; }
+  .shop-row b { display: block; font-size: 15px; }
+  .shop-row .own { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; color: var(--accent); }
+  .shop-row button { display: flex; align-items: center; gap: 4px; padding: 9px 12px; font-weight: 800; color: #fff; background: var(--accent); border-color: transparent; white-space: nowrap; }
+  .shop-row button:disabled { opacity: 0.45; }
+  .shop-row button .coin { width: 17px; height: 17px; }
   .home-body { flex: 1; overflow: auto; padding: 0 16px max(24px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
   .home-body > * { max-width: 728px; margin-left: auto; margin-right: auto; }
   .continue { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px; padding: 12px 14px; text-align: left; color: #5a4862; background: #ffffffc4; border: 1px solid #ffffffe6; border-radius: 20px; box-shadow: 0 8px 20px #b48aa02e; }
@@ -360,6 +418,17 @@
     <button id="resetView" title="시점 초기화">⟲</button>
   </div>
 
+  <!-- Coins and items (icons and numbers filled in by game.js showWallet). -->
+  <div class="pill itembar" id="items" hidden>
+    <button class="coins" id="coins" aria-label="상점"></button>
+    <button class="item" id="hintBtn" aria-label="힌트"></button>
+    <button class="item" id="eraserBtn" aria-label="지우개"></button>
+  </div>
+  <div class="pill erasebar" id="eraseBar" role="status" hidden>
+    <span class="erase-ic" id="eraseIcon"></span><b id="eraseText"></b><button class="x" id="eraseCancel" aria-label="취소"></button>
+  </div>
+  <div class="pill toast" id="toast" role="status" hidden></div>
+
   <div class="panel pill" id="panel" hidden>
     <h3>퍼즐 생성기</h3>
     <div class="row">
@@ -398,12 +467,9 @@
     <button class="primary" id="guideNext" hidden>다음</button>
   </div>
 
+  <!-- The card over a stage (clear, Game Over, buying an item): game.js showCard fills it. -->
   <div class="clear" id="clear" hidden>
-    <div class="card">
-      <h2 id="clearTitle">스테이지 클리어!</h2>
-      <p class="clear-stars" id="clearStars"></p>
-      <button class="primary" id="clearNext">다음 스테이지</button>
-    </div>
+    <div class="card" id="card" role="dialog" aria-modal="true"></div>
   </div>
 
   <div class="overlay" id="menu" hidden>
@@ -418,10 +484,24 @@
     </section>
   </div>
 
+  <div class="overlay shop" id="shop" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
+      <header class="sheet-head">
+        <div class="sheet-title"><b id="shopTitle">상점</b><span id="shopCoins"></span></div>
+        <button class="icon" id="shopClose" aria-label="닫기">✕</button>
+      </header>
+      <div class="sheet-body">
+        <div class="shop-row"><span class="ic" id="shopHintIcon"></span><div class="tx"><b>힌트</b><span class="own" id="shopHint"></span></div><button id="buyHint"></button></div>
+        <div class="shop-row"><span class="ic" id="shopEraserIcon"></span><div class="tx"><b>지우개</b><span class="own" id="shopEraser"></span></div><button id="buyEraser"></button></div>
+      </div>
+    </section>
+  </div>
+
   <div class="home" id="home" hidden>
     <header class="home-head">
       <div class="home-brand"><svg class="home-cube" aria-hidden="true"><use href="#cubeLogo"/></svg><svg class="home-word" viewBox="-8 -8 1010.23 116" role="img" aria-label="Arrow Cube"><use href="#wordLogo"/></svg></div>
       <div class="pill home-stars" id="homeStars"></div>
+      <button class="pill home-coins" id="homeCoins" aria-label="상점"></button>
       <button class="pill icon" id="homeSound" title="효과음 끄기">🔊</button>
     </header>
     <div class="home-body" id="homeBody"></div>
