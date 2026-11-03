@@ -13,8 +13,9 @@ const ZONE = H / CLIMB_ZONES.length; // each zone's height, the tree's at the bo
 const f1 = (v) => +v.toFixed(1);
 // The stops, from the bottom up, swinging from side to side.
 const STOPS = CLIMB.map((_, i) => [187.5 + 100 * Math.sin(i * 0.95), H - 130 - (i * (H - 260)) / (CLIMB.length - 1)]);
-// The path through them as cubic Béziers (Catmull-Rom), from the ground up.
-const PTS = [[187.5, H], ...STOPS];
+// The path through them as cubic Béziers (Catmull-Rom), from a start on the grass high
+// enough for the cube to show whole at no points.
+const PTS = [[187.5, H - 44], ...STOPS];
 const SEGS = PTS.slice(0, -1).map((p1, i) => {
   const p0 = PTS[Math.max(0, i - 1)];
   const p2 = PTS[i + 1];
