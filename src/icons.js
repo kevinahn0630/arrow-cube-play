@@ -10,6 +10,9 @@ const toy = (body) => `<svg class="toy" viewBox="0 0 48 48" aria-hidden="true">$
 const line = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const BULB = 'M24 9c-7 0-12 5.1-12 11.6 0 4.3 2.1 7 4.2 9.1 1.4 1.4 2.1 2.8 2.1 4.4v1.2h11.4v-1.2c0-1.6.7-3 2.1-4.4 2.1-2.1 4.2-4.8 4.2-9.1C36 14.1 31 9 24 9Z';
 const SHADOW = '<ellipse cx="24" cy="43.4" rx="15" ry="2.6" fill="#4a3f5c" opacity="0.12"/>';
+// A star on a world's page: earned in gold, still to come in grey.
+const star = (on) =>
+  `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.3L12 17l-5.7 3 1.2-6.3-4.7-4.4 6.4-.8Z" fill="${on ? '#ffc93f' : '#ddd3dc'}" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.2 8.6 12 5.2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="${on ? 0.8 : 0.5}"/></svg>`;
 // A speaker, its sound waves in gold; muted, grey with a red cross.
 const speaker = (on) =>
   toy(`<path d="M7 19.4a3 3 0 0 1 3-3h5.4v15.2H10a3 3 0 0 1-3-3Z" fill="${on ? '#9eabd0' : '#c4bfd0'}"/>
@@ -82,6 +85,12 @@ export const ICON = {
     <path d="M18.6 16.4c.4-1.6 1-3 1.8-4.2" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.8"/>`),
   soundOn: speaker(true),
   soundOff: speaker(false),
+  // A world's page: its stars, the pin (in currentColor) on the stage to play, and the
+  // tutorial's play mark.
+  starOn: star(true),
+  starOff: star(false),
+  pin: '<svg viewBox="0 0 40 48" aria-hidden="true"><path d="M20 46c-1.6-6-15-14-15-26a15 15 0 0 1 30 0c0 12-13.4 20-15 26Z" fill="currentColor" stroke="#fff" stroke-width="2.4"/><circle cx="20" cy="19.5" r="7" fill="#fff"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L18.6 12Z" fill="currentColor"/></svg>',
   // The shop page's way back, and the climb's marks.
   flag: line('M6 21V3.8M6 4.6c3.1-1.7 5.6 1.5 8.7 0 1.2-.6 2.2-.7 3.3-.4v8.6c-1.1-.3-2.1-.2-3.3.4-3.1 1.5-5.6-1.7-8.7 0'),
   back: line('M14.8 5.4 8.2 12l6.6 6.6'),

@@ -394,34 +394,50 @@
   .chapter .stars { margin-left: 8px; font-size: 12px; letter-spacing: 1px; text-shadow: 0 0 8px #ffd58a; }
   .chapter-note { margin: 6px auto 14px; text-align: center; font-size: 11px; letter-spacing: 1px; color: #a091a6; }
 
-  /* The stage menu: a sheet with one world's stages, over the game or the home screen. */
-  .overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 20;
-    display: grid;
-    place-items: center;
-    background: #4a3f5c59;
-    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
-  }
-  .overlay[hidden] { display: none; }
-  .sheet {
-    width: min(560px, 100%);
-    max-height: 100%;
-    display: flex;
-    flex-direction: column;
-    background: #fbf6f4;
-    border-radius: 22px;
-    box-shadow: 0 18px 50px #4a3f5c38;
-    overflow: hidden;
-  }
-  .sheet-head { display: flex; align-items: center; gap: 10px; padding: 14px 14px 12px; background: #fff; border-bottom: 1px solid var(--line); }
-  .sheet-title { flex: 1; min-width: 0; }
-  .sheet-title b { display: block; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sheet-title span { font-size: 12px; color: var(--muted); }
+  /* A world's page (2026-11-04, the user's pick of dist/samples/world.html 안 B): its sky and
+     landmarks behind, its stages as round buttons along a path winding up from the tutorial,
+     a pin on the stage to play, and over it all the way back, the flag, the stars and a bar
+     with a star where each is earned. --acc and its shades are the world's colour. */
+  .world-page { position: fixed; inset: 0; z-index: 21; overflow: hidden; }
+  .world-page[hidden] { display: none; }
+  .world-page:not([hidden]) { animation: page-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @keyframes page-in { from { transform: translateX(44px); opacity: 0; } }
+  .wp-bg, .wp-bg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wp-map { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; }
+  .wp-path { position: relative; }
+  .wp-path > svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .node { position: absolute; width: 58px; height: 58px; margin: -29px 0 0 -29px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; font-size: 19px; font-weight: 800; color: #b3a3b4; background: linear-gradient(180deg, #fff, #f8efed); box-shadow: 0 5px 0 #e6d6d2, 0 8px 14px #b48aa033; }
+  .node.done { color: #fff; background: linear-gradient(180deg, var(--acc-l), var(--acc)); box-shadow: 0 5px 0 var(--acc-d), 0 8px 14px #4a3f5c2e; text-shadow: 0 1px 0 var(--acc-d); }
+  .node.here { width: 66px; height: 66px; margin: -33px 0 0 -33px; font-size: 22px; color: var(--acc); background: #fff; box-shadow: 0 0 0 4px var(--acc), 0 6px 0 4px var(--acc-d), 0 0 26px var(--acc-g); text-shadow: none; }
+  .node.here.done { color: #fff; background: linear-gradient(180deg, var(--acc-l), var(--acc)); text-shadow: 0 1px 0 var(--acc-d); }
+  .node .badge { position: absolute; top: -10px; right: -10px; width: 26px; height: 26px; }
+  .node .badge svg { display: block; width: 26px; height: 26px; }
+  .tut-at { position: absolute; transform: translate(-50%, -50%); }
+  .tut-btn { display: flex; align-items: center; gap: 6px; height: 50px; padding: 0 18px 0 16px; border: 0; border-radius: 25px; font-size: 15px; font-weight: 800; color: #fff; background: linear-gradient(180deg, var(--acc-l), var(--acc)); box-shadow: 0 5px 0 var(--acc-d), 0 8px 14px #4a3f5c2e; text-shadow: 0 1px 0 var(--acc-d); white-space: nowrap; }
+  .tut-btn > svg { width: 18px; height: 18px; }
+  .tut-btn .ok { width: 22px; height: 22px; display: grid; place-items: center; margin-left: 2px; border-radius: 50%; background: #fff; color: var(--acc); }
+  .tut-btn .ok svg { width: 15px; height: 15px; }
+  .tut-btn .ok svg path { stroke-width: 3.4; }
+  .tut-btn.here { box-shadow: 0 0 0 4px #fff, 0 5px 0 4px var(--acc-d), 0 0 26px var(--acc-g); }
+  .wp-pin { position: absolute; width: 40px; height: 48px; margin: -94px 0 0 -20px; color: var(--acc); pointer-events: none; animation: pin-bob 1.4s ease-in-out infinite; }
+  .wp-pin svg { display: block; width: 40px; height: 48px; filter: drop-shadow(0 4px 4px #4a3f5c33); }
+  @keyframes pin-bob { 50% { transform: translateY(-7px); } }
+  .wp-top { position: absolute; left: 0; right: 0; top: 0; padding: max(12px, env(safe-area-inset-top)) 0 16px; background: linear-gradient(180deg, #ffffffd9 62%, #ffffff00); pointer-events: none; }
+  .wp-head { display: flex; align-items: center; gap: 10px; max-width: 520px; margin: 0 auto; padding: 0 16px 8px; }
+  .wp-back { width: 46px; height: 46px; flex: none; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 4px 0 #ead9d5, 0 8px 16px #b48aa033; color: var(--acc); pointer-events: auto; }
+  .wp-back svg { width: 26px; height: 26px; }
+  .wp-back svg path { stroke-width: 3.2; }
+  .wp-head .flag { width: 42px; border-radius: 6px; box-shadow: 0 2px 6px #4a3f5c33; }
+  .wp-title { min-width: 0; }
+  .wp-title b { display: block; font-size: 23px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 1px 0 #fff; }
+  .wp-title small { display: block; margin-top: 1px; font-size: 12px; font-weight: 700; color: #7c6a8c; }
+  .wp-bar { position: relative; width: calc(100% - 52px); max-width: 470px; height: 14px; margin: 6px auto 0; border-radius: 999px; background: #ffffffb0; box-shadow: inset 0 2px 3px #4a3f5c1a; }
+  .wp-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: linear-gradient(180deg, var(--acc-l), var(--acc)); }
+  .wp-bar .star { position: absolute; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; }
+  .wp-bar .star svg { display: block; width: 30px; height: 30px; }
+  @media (prefers-reduced-motion: reduce) { .wp-pin { animation: none; } }
   .icon { width: 40px; height: 40px; padding: 0; font-size: 18px; flex: none; }
   .icon[hidden] { display: none; }
-  .sheet-body { overflow: auto; padding: 14px 14px 20px; overscroll-behavior: contain; }
   .stars { color: #e3a21a; letter-spacing: 1px; }
   .orb-path { position: relative; }
   .orb-trail { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
@@ -438,24 +454,6 @@
   .orb-name { display: block; margin-top: 6px; font-size: 13px; font-weight: 500; letter-spacing: 1px; white-space: nowrap; }
   .orb-foot { display: block; margin-top: 1px; font-size: 10px; color: #a091a6; white-space: nowrap; }
   .orb-foot .stars { font-size: 10px; letter-spacing: 0; }
-  .sheet-head .flag { width: 36px; }
-  .about { font-size: 13px; color: var(--muted); margin: 0 2px 14px; line-height: 1.5; }
-  .tutorial-btn { display: block; width: 100%; margin: 0 0 12px; font-size: 15px; font-weight: 700; background: #fff; }
-  .tutorial-btn.done { background: var(--accent); color: #fff; border-color: transparent; }
-  .tutorial-btn.current { outline: 3px solid var(--ink); outline-offset: 2px; }
-  .stage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; }
-  .stage {
-    position: relative;
-    aspect-ratio: 1;
-    padding: 0;
-    font-size: 15px;
-    font-weight: 700;
-    border-radius: 12px;
-    background: #fff;
-  }
-  .stage.cleared { background: var(--accent); color: #fff; border-color: transparent; }
-  .stage.current { outline: 3px solid var(--ink); outline-offset: 2px; }
-  .stage .mark { position: absolute; top: -7px; right: -5px; font-size: 13px; color: #e3a21a; text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
 
   /* Motion (2026-11-04, fx.js): the layer effects fly in, cards popping up and their parts
      rising in turn, the clear card's ribbon and sun rays, gleams on the big buttons, numbers
@@ -604,16 +602,19 @@
     <div class="card" id="card" role="dialog" aria-modal="true"></div>
   </div>
 
-  <div class="overlay" id="menu" hidden>
-    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
-      <header class="sheet-head">
-        <button class="icon" id="menuBack" aria-label="홈 화면으로">‹</button>
-        <span class="flag" id="menuFlag"></span>
-        <div class="sheet-title"><b id="menuTitle">월드</b><span id="menuSub"></span></div>
-        <button class="icon" id="menuClose" aria-label="닫기">✕</button>
+  <!-- A world's page (game.js showWorld): its stages on a path over its scenery, from the
+       home screen's orbs or a stage's title. -->
+  <div class="world-page" id="worldPage" hidden>
+    <div class="wp-bg" id="worldBg"></div>
+    <div class="wp-map" id="worldMap"><div class="wp-path" id="worldPath"></div></div>
+    <div class="wp-top">
+      <header class="wp-head">
+        <button class="wp-back" id="worldBack" aria-label="뒤로"></button>
+        <span class="flag" id="worldPageFlag"></span>
+        <div class="wp-title"><b id="worldPageName"></b><small id="worldPageSub"></small></div>
       </header>
-      <div class="sheet-body" id="menuBody"></div>
-    </section>
+      <div class="wp-bar" id="worldBar"></div>
+    </div>
   </div>
 
   <!-- The shop as a page over a stage (from the coins in the bar, or 코인 사기); on the

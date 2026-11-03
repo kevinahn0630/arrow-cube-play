@@ -2111,10 +2111,10 @@ function renderClimb() {
   const c = wallet.climb;
   const [y, m] = c.season.split('-').map(Number);
   const left = Math.round((new Date(y, m, 1) - new Date(new Date().toDateString())) / 86400000);
-  $('climbSeason').textContent = `${m}월 시즌`;
+  $('climbSeason').textContent = `${m}월`;
   $('climbLeft').textContent = `${left}일 남음`;
   $('climbPoints').innerHTML = `${ICON.flag}<span class="n">${digits(c.points)}</span>`;
-  $('climbRules').innerHTML = `<span>${ICON.check}깨면 10</span><span>${ICON.flame}연속 +10</span><span>${ICON.heart}하트 +10</span>`;
+  $('climbRules').innerHTML = `<span>${ICON.check}클리어 10</span><span>${ICON.flame}연속 +10</span><span>${ICON.heart}하트 +10</span>`;
   const { svg, y: at } = climbArt(c.points);
   const scroll = $('climbScroll');
   scroll.innerHTML = svg;
@@ -2213,7 +2213,7 @@ function shortName(key) {
 // The home screen, with 이어서 하기 back into the stage the player left (if it is
 // still going).
 function showHome() {
-  closeMenu();
+  closeWorld();
   closeShopPage();
   $('clear').hidden = true;
   game.screen = 'home';
@@ -2226,7 +2226,7 @@ function showHome() {
 
 // Into the game: the home screen and the menu put away.
 function play() {
-  closeMenu();
+  closeWorld();
   $('home').hidden = true;
   game.screen = 'play';
   styleBars();
@@ -2281,7 +2281,7 @@ function worldOrb(key, locked = false) {
   foot.append(`${done}/${n}`);
   orb.append(node('b', 'orb-name', shortName(key)), foot);
   orb.setAttribute('aria-label', `${shortName(key)}, ${done}/${n} 클리어${w.tier ? `, 별 ${starsOf(progress, key)}개` : ''}${locked ? ', 잠김' : ''}`);
-  orb.onclick = () => openMenu(key);
+  orb.onclick = () => openWorld(key);
   return orb;
 }
 
@@ -2316,51 +2316,86 @@ function layoutOrbs() {
   }
 }
 
-// World key's stage menu; from the generator, the home screen.
-function openMenu(key = game.world) {
+// A world's page (2026-11-04, the user's pick of dist/samples/world.html 안 B), from the
+// home screen's orbs or a stage's title; from the generator, the home screen. Its sky and
+// landmarks (scenery.js) stay behind while its stages, round buttons in its colour once
+// cleared, wind up a path from the tutorial; a pin stands on the stage to play (the one
+// being played, else the first not cleared) and the view starts there. Over it: the way
+// back, the flag and name, the stars, and a bar with a star at each stage that earns one.
+let worldOn = '';
+function openWorld(key = game.world) {
   if (key === 'free') return showHome();
-  showStages(key);
-  $('menu').hidden = false;
+  $('worldPage').hidden = false;
+  showWorld(key);
 }
+const closeWorld = () => ($('worldPage').hidden = true);
 
-const closeMenu = () => ($('menu').hidden = true);
-
-function showStages(key) {
+// A colour (#rrggbb) moved part of the way to another.
+const mixColor = (a, b, k) => `#${[1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - k) + parseInt(b.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('')}`;
+const STEP_Y = 92; // between stages along the path
+function showWorld(key) {
+  worldOn = key;
   const w = WORLDS[key];
   const n = w.stages.length;
-  $('menuFlag').innerHTML = worldIcon(key);
-  $('menuTitle').textContent = shortName(key);
-  $('menuSub').textContent = `${w.tier ? `${starText(starsOf(progress, key))} · ` : ''}${clearedCount(progress, key)} / ${n} 클리어`;
-  const body = $('menuBody');
-  body.style.setProperty('--accent', themeOf(key).accent);
-  const about = node('p', 'about', w.about);
-  if (w.tier) about.textContent += ` · ${STAR_AT.join(', ')}스테이지까지 깨면 별을 하나씩 얻어요`;
-  const grid = node('div', 'stage-grid');
-  for (let s = 1; s <= n; s++) {
-    const done = isCleared(progress, key, s);
-    const here = key === game.world && s === game.stage;
-    const b = node('button', `stage${done ? ' cleared' : ''}${here ? ' current' : ''}`, s);
-    if (w.tier && STAR_AT.includes(s)) b.append(node('span', 'mark', '★'));
-    if (DEV) b.title = `예상 오답 ${STAGE_SEEDS[key][s - 1].wrong}회`;
-    b.setAttribute('aria-label', `스테이지 ${s}${done ? ', 클리어' : ''}${here ? ', 지금 스테이지' : ''}`);
-    b.onclick = () => {
-      play();
-      loadStage(key, s);
-    };
-    grid.append(b);
-  }
-  // The tutorial comes before stage 1, and can be played again any time.
-  const done = tutorialDone(key);
-  const tutorial = node('button', `tutorial-btn${done ? ' done' : ''}${key === game.world && game.stage === 0 ? ' current' : ''}`, done ? '튜토리얼 ✓' : '튜토리얼');
-  tutorial.setAttribute('aria-label', `튜토리얼${done ? ', 끝냄' : ''}`);
-  tutorial.onclick = () => {
+  const page = $('worldPage');
+  const { background, accent } = themeOf(key);
+  page.style.background = background;
+  page.style.cssText += `;--acc:${accent};--acc-l:${mixColor(accent, '#ffffff', 0.32)};--acc-d:${mixColor(accent, '#000000', 0.22)};--acc-g:${accent}88`;
+  $('worldBg').innerHTML = scenery(key, page.clientWidth, page.clientHeight);
+  $('worldPageFlag').innerHTML = worldIcon(key);
+  $('worldPageName').textContent = shortName(key);
+  const done = clearedCount(progress, key);
+  $('worldPageSub').innerHTML = `${w.tier ? `<span class="stars">${starText(starsOf(progress, key))}</span> · ` : ''}${done} / ${n}`;
+  $('worldBar').innerHTML =
+    `<i style="width:${(100 * done) / n}%"></i>` + (w.tier ? STAR_AT.map((s) => `<span class="star" style="left:${(100 * s) / n}%">${done >= s ? ICON.starOn : ICON.starOff}</span>`).join('') : '');
+
+  // The path: the tutorial at the bottom (0), then stages 1 to n swinging side to side,
+  // dotted, and drawn in the world's colour as far as the stages are cleared in a row.
+  const map = $('worldMap');
+  const width = map.clientWidth;
+  const height = 120 + n * STEP_Y + 210;
+  const swing = Math.min(110, width / 2 - 48);
+  const at = Array.from({ length: n + 1 }, (_, k) => [width / 2 + swing * Math.sin(k * 0.9), height - 120 - k * STEP_Y]);
+  const line = (to) => at.slice(0, to + 1).map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('');
+  let run = 0;
+  while (run < n && isCleared(progress, key, run + 1)) run++;
+  const path = $('worldPath');
+  path.style.height = `${height}px`;
+  path.innerHTML = `<svg width="${width}" height="${height}" aria-hidden="true"><path d="${line(n)}" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 14" opacity="0.95"/>${
+    run ? `<path d="${line(run)}" fill="none" stroke="${accent}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>` : ''
+  }</svg>`;
+  const first = Array.from({ length: n }, (_, i) => i + 1).find((s) => !isCleared(progress, key, s)) ?? n;
+  const here = game.playing && key === game.world ? game.stage : tutorialDone(key) ? first : 0;
+  const place = (el, [x, y]) => Object.assign(el.style, { left: `${x.toFixed(1)}px`, top: `${y.toFixed(1)}px` });
+  const go = (s) => () => {
     play();
-    loadStage(key, 0);
+    loadStage(key, s);
   };
-  body.replaceChildren(about, tutorial, grid);
-  body.scrollTop = 0;
-  // On a long list, bring the current stage into view.
-  grid.querySelector('.current')?.scrollIntoView({ block: 'nearest' });
+  // The tutorial comes before stage 1, and can be played again any time.
+  const tutDone = tutorialDone(key);
+  const tut = node('button', `tut-btn${here === 0 ? ' here' : ''}`);
+  tut.innerHTML = `${ICON.play}튜토리얼${tutDone ? `<i class="ok">${ICON.check}</i>` : ''}`;
+  tut.setAttribute('aria-label', `튜토리얼${tutDone ? ', 끝냄' : ''}`);
+  tut.onclick = go(0);
+  const tutAt = node('span', 'tut-at');
+  tutAt.append(tut);
+  place(tutAt, at[0]);
+  path.append(tutAt);
+  for (let s = 1; s <= n; s++) {
+    const cleared = isCleared(progress, key, s);
+    const b = node('button', `node${cleared ? ' done' : ''}${s === here ? ' here' : ''}`, s);
+    if (w.tier && STAR_AT.includes(s)) b.insertAdjacentHTML('beforeend', `<span class="badge">${cleared ? ICON.starOn : ICON.starOff}</span>`);
+    if (DEV) b.title = `예상 오답 ${STAGE_SEEDS[key][s - 1].wrong}회`;
+    b.setAttribute('aria-label', `스테이지 ${s}${cleared ? ', 클리어' : ''}${game.playing && key === game.world && s === game.stage ? ', 지금 스테이지' : ''}`);
+    b.onclick = go(s);
+    place(b, at[s]);
+    path.append(b);
+  }
+  const pin = node('span', 'wp-pin');
+  pin.innerHTML = ICON.pin;
+  place(pin, at[here]);
+  path.append(pin);
+  map.scrollTop = at[here][1] - map.clientHeight * 0.55;
 }
 
 const SLIDERS = ['N', 'minLen', 'maxLen', 'straight', 'fill', 'block', 'deep', 'wrap', 'long', 'amount'];
@@ -2441,13 +2476,12 @@ $('guideSkip').onclick = () => {
 };
 $('solve').onclick = autoSolve;
 $('panelToggle').onclick = () => ($('panel').hidden = !$('panel').hidden);
-$('worldBtn').onclick = () => openMenu();
+$('worldBtn').onclick = () => openWorld();
 $('homeBtn').onclick = showHome;
-$('menuClose').onclick = closeMenu;
-$('menuBack').onclick = showHome;
-// A tap on the dimmed backdrop, or Escape, closes the menu.
-$('menu').onclick = (e) => e.target === $('menu') && closeMenu();
-addEventListener('keydown', (e) => e.key === 'Escape' && (closeMenu(), closeShopPage()));
+// A world's page goes back to what was under it, the home screen or the stage; so does Escape.
+$('worldBack').innerHTML = ICON.back;
+$('worldBack').onclick = closeWorld;
+addEventListener('keydown', (e) => e.key === 'Escape' && (closeWorld(), closeShopPage()));
 
 // The generator panel's gimmick list, from the worlds (by tier).
 for (const key of [...COUNTRIES].sort((a, b) => WORLDS[a].tier - WORLDS[b].tier)) {
@@ -2523,6 +2557,7 @@ function resize() {
   controls.handleResize();
   showScenery();
   if (!$('home').hidden) layoutOrbs();
+  if (!$('worldPage').hidden) showWorld(worldOn);
   if (game.puz && Math.abs(thickness() - game.thick) > 0.01) {
     game.thick = thickness();
     redrawAll();

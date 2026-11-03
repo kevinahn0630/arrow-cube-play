@@ -1,15 +1,15 @@
 // The climb's picture (the 이벤트 tab, economy.js CLIMB): a winding path up from a tree,
 // through the sky and the stratosphere, into space, with a stop for each reward every
 // CLIMB_STEP points and the cube where the season's points have got to. An SVG string,
-// CLIMB_W by CLIMB_H, drawn in the flat pastel way of scenery.js.
-import { CLIMB, CLIMB_STEP, CLIMB_ZONES } from './economy.js';
+// CLIMB_W by CLIMB_H, drawn in the flat pastel way of scenery.js. The four zones are a
+// quarter of the height each, and carry no names (2026-11-04 user request).
+import { CLIMB, CLIMB_STEP } from './economy.js';
 import { rewardIcon } from './icons.js';
 
 export const CLIMB_W = 375;
 export const CLIMB_H = 2600;
 const W = CLIMB_W;
 const H = CLIMB_H;
-const ZONE = H / CLIMB_ZONES.length; // each zone's height, the tree's at the bottom
 const f1 = (v) => +v.toFixed(1);
 // The stops, from the bottom up, swinging from side to side.
 const STOPS = CLIMB.map((_, i) => [187.5 + 100 * Math.sin(i * 0.95), H - 130 - (i * (H - 260)) / (CLIMB.length - 1)]);
@@ -75,8 +75,7 @@ function backdrop() {
     <rect x="58" y="2390" width="20" height="120" rx="6" fill="#c9a184"/>
     <circle cx="68" cy="2372" r="54" fill="#a3d8b2"/><circle cx="36" cy="2404" r="34" fill="#8fcda1"/><circle cx="102" cy="2398" r="38" fill="#8fcda1"/><circle cx="54" cy="2350" r="18" fill="#bfe5c9"/>
     <rect x="322" y="2440" width="10" height="46" rx="4" fill="#c9a184"/><circle cx="327" cy="2430" r="26" fill="#9fd5af"/>
-    <circle cx="150" cy="2540" r="3" fill="#f4a493"/><circle cx="210" cy="2556" r="3" fill="#f7c873"/><circle cx="270" cy="2532" r="3" fill="#f4a493"/>
-    ${CLIMB_ZONES.map((z, i) => `<text x="18" y="${f1(H - i * ZONE - 28)}" font-size="13" letter-spacing="4" font-weight="300" fill="${i < 2 ? '#8a7a96' : '#ffffffb8'}">${z}</text>`).join('')}`;
+    <circle cx="150" cy="2540" r="3" fill="#f4a493"/><circle cx="210" cy="2556" r="3" fill="#f7c873"/><circle cx="270" cy="2532" r="3" fill="#f4a493"/>`;
 }
 const BACKDROP = backdrop();
 

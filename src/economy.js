@@ -55,7 +55,6 @@ export const CLIMB = [
   ['coins', 200], ['hint', 2], ['coins', 250], ['eraser', 1], ['coins', 500],
   ['coins', 250], ['hint', 3], ['coins', 300], ['eraser', 2], ['coins', 1000],
 ];
-export const CLIMB_ZONES = ['나무', '하늘', '성층권', '우주'];
 export function climbPoints({ row, misses, again = false }) {
   const points = 10 + 10 * Math.min(4, Math.max(0, row - 1)) + 10 * Math.max(0, 3 - misses);
   return again ? Math.round(points / 5) : points;
