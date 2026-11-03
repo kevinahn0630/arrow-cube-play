@@ -2317,7 +2317,7 @@ $('homeCoins').onclick = () => showTab('shop');
 $('shopBack').innerHTML = ICON.back;
 $('shopBack').onclick = closeShopPage;
 // The home screen's tabs and the daily gift's box.
-for (const [id, tab, icon] of [['tabShop', 'shop', ICON.shop], ['tabHome', 'home', ICON.home], ['tabClimb', 'climb', ICON.flag]]) {
+for (const [id, tab, icon] of [['tabShop', 'shop', ICON.stall], ['tabHome', 'home', ICON.house], ['tabClimb', 'climb', ICON.rocket]]) {
   $(id).querySelector('i').innerHTML = icon;
   $(id).onclick = () => showTab(tab);
 }
@@ -2341,10 +2341,12 @@ $('resetView').onclick = () => {
 // choice on the device).
 const showSound = () => {
   for (const id of ['sound', 'homeSound']) {
-    $(id).textContent = isMuted() ? '🔇' : '🔊';
+    $(id).innerHTML = isMuted() ? ICON.soundOff : ICON.soundOn;
     $(id).title = isMuted() ? '효과음 켜기' : '효과음 끄기';
+    $(id).setAttribute('aria-label', $(id).title);
   }
 };
+$('homeBtn').innerHTML = ICON.house;
 showSound();
 $('sound').onclick = $('homeSound').onclick = () => {
   setMuted(!isMuted());

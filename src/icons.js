@@ -1,13 +1,24 @@
-// Small icons (SVG strings). The items and what the shop sells are drawn like toys, soft
-// and rounded with a lighter and a darker side and no outline (2026-11-03 user pick, 안 1
-// of dist/samples/icons.html); the rest are in the line style of the home button: round
-// caps, strokes in currentColor. The coin is gold with the game's up arrow.
+// Small icons (SVG strings). The items, what the shop sells, the home screen's tabs, the
+// sound button and the stage's home button are drawn like toys, soft and rounded with a
+// lighter and a darker side and no outline (2026-11-03 user picks, dist/samples/icons.html
+// 안 1 and tabs2.html); the rest are line icons: round caps, strokes in currentColor. The
+// coin is gold with the game's up arrow.
 const COIN = '<circle cx="10" cy="10" r="9.3" fill="#efb245"/><circle cx="10" cy="10" r="7" fill="#f8cb63" stroke="#fde4a3" stroke-width="1.2"/><path d="M10 13.7V6.8M7.3 9.4 10 6.7l2.7 2.7" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>';
 // A coin with a white rim, so coins lying on each other stay apart.
 const coinAt = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})"><circle cx="10" cy="10" r="10" fill="#fff"/>${COIN}</g>`;
 const toy = (body) => `<svg class="toy" viewBox="0 0 48 48" aria-hidden="true">${body}</svg>`;
 const line = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const BULB = 'M24 9c-7 0-12 5.1-12 11.6 0 4.3 2.1 7 4.2 9.1 1.4 1.4 2.1 2.8 2.1 4.4v1.2h11.4v-1.2c0-1.6.7-3 2.1-4.4 2.1-2.1 4.2-4.8 4.2-9.1C36 14.1 31 9 24 9Z';
+const SHADOW = '<ellipse cx="24" cy="43.4" rx="15" ry="2.6" fill="#4a3f5c" opacity="0.12"/>';
+// A speaker, its sound waves in gold; muted, grey with a red cross.
+const speaker = (on) =>
+  toy(`<path d="M7 19.4a3 3 0 0 1 3-3h5.4v15.2H10a3 3 0 0 1-3-3Z" fill="${on ? '#9eabd0' : '#c4bfd0'}"/>
+    <path d="M15.4 16.4 25.6 8a1.8 1.8 0 0 1 2.9 1.4v29.2a1.8 1.8 0 0 1-2.9 1.4l-10.2-8.4Z" fill="${on ? '#8291bb' : '#aea8bf'}"/>
+    <path d="M15.4 16.4 25.6 8a1.8 1.8 0 0 1 2.9 1.4V24H15.4Z" fill="${on ? '#aab6db' : '#cfcadb'}"/>
+    <path d="M9.6 19.6h3.2" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+    ${on
+      ? '<path d="M33 18.6a7.6 7.6 0 0 1 0 10.8" fill="none" stroke="#f4b23c" stroke-width="3.2" stroke-linecap="round"/><path d="M37.6 13.8a14 14 0 0 1 0 20.4" fill="none" stroke="#ffd04f" stroke-width="3.2" stroke-linecap="round"/>'
+      : '<path d="M33.4 19.2l9 9.6M42.4 19.2l-9 9.6" stroke="#ef5a4c" stroke-width="3.4" stroke-linecap="round"/>'}`);
 
 export const ICON = {
   coin: `<svg class="coin" viewBox="0 0 20 20" aria-hidden="true">${COIN}</svg>`,
@@ -43,9 +54,35 @@ export const ICON = {
     `<svg viewBox="0 0 44 36" aria-hidden="true">${coinAt(4, 9, 1.25)}${coinAt(15, 3, 1.25)}</svg>`,
     `<svg viewBox="0 0 44 36" aria-hidden="true">${coinAt(2, 11, 1.15)}${coinAt(19, 11, 1.15)}${coinAt(10.5, 0.5, 1.15)}</svg>`,
   ],
-  // The home screen's tabs, the shop page's way back, and the climb's marks.
-  shop: line('M5.6 8.6h12.8l-1 11a1.7 1.7 0 0 1-1.7 1.5H8.3a1.7 1.7 0 0 1-1.7-1.5ZM9 8.6V7.2a3 3 0 0 1 6 0v1.4'),
-  home: line('M3.8 11.3 12 4.6l8.2 6.7M6.4 9.6v9.6c0 .7.5 1.2 1.2 1.2h2.9v-5h3v5h2.9c.7 0 1.2-.5 1.2-1.2V9.6'),
+  // The home screen's tabs: a market stall under a striped awning, a small house (also
+  // the stage's way home), and a rocket off to space as the climb goes.
+  stall: toy(`${SHADOW}
+    <rect x="9.5" y="18" width="29" height="23.5" rx="3" fill="#fff1e4"/><path d="M30.5 18h5a3 3 0 0 1 3 3v17.5a3 3 0 0 1-3 3h-5Z" fill="#f5dccb"/>
+    <rect x="13" y="26" width="9" height="15.5" rx="2.2" fill="#c9a184"/><circle cx="20" cy="34" r="0.9" fill="#fff3d9"/>
+    <rect x="25" y="26" width="9.5" height="7" rx="1.8" fill="#bfe0f5"/><path d="M26.6 28.2h3.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M5.5 11.5a3 3 0 0 1 3-2.5h31a3 3 0 0 1 3 2.5l1.3 6.8c0 2.3-1.9 3.8-4.1 3.8-1.9 0-3.4-1.2-3.9-2.9-.5 1.7-2 2.9-3.9 2.9s-3.4-1.2-3.9-2.9c-.5 1.7-2 2.9-3.9 2.9s-3.4-1.2-3.9-2.9c-.5 1.7-2 2.9-3.9 2.9s-3.4-1.2-3.9-2.9c-.5 1.7-2 2.9-3.9 2.9-2.2 0-4.1-1.5-4.1-3.8Z" fill="#f68c7c"/>
+    <path d="M12.4 9h7.8l-.6 10.4c-.6 1.6-2 2.7-3.8 2.7-1.4 0-2.6-.7-3.3-1.8ZM27.8 9h7.8l.9 11.3c-.7 1.1-1.9 1.8-3.3 1.8-1.8 0-3.2-1.1-3.8-2.7Z" fill="#fff" opacity="0.92"/>
+    <path d="M9 13.6h7" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.5"/>`),
+  house: toy(`${SHADOW}
+    <rect x="30.5" y="10.5" width="5" height="9" rx="1.2" fill="#e37465"/>
+    <rect x="11" y="22" width="26" height="19.5" rx="2.5" fill="#fff1e4"/><path d="M29 22h5.5a2.5 2.5 0 0 1 2.5 2.5v14.5a2.5 2.5 0 0 1-2.5 2.5H29Z" fill="#f5dccb"/>
+    <rect x="19.5" y="29" width="9" height="12.5" rx="2.2" fill="#c9a184"/><circle cx="26.3" cy="35.6" r="0.9" fill="#fff3d9"/>
+    <rect x="13.5" y="27.5" width="4.4" height="5" rx="1.2" fill="#bfe0f5"/>
+    <path d="M7.4 23.4 22.3 9.7a2.5 2.5 0 0 1 3.4 0l14.9 13.7c1 .9.3 2.6-1.1 2.6H8.5c-1.4 0-2.1-1.7-1.1-2.6Z" fill="#e8786a"/>
+    <path d="M7.4 23.4 22.3 9.7c.5-.5 1.1-.7 1.7-.7V26H8.5c-1.4 0-2.1-1.7-1.1-2.6Z" fill="#f6968a"/>
+    <path d="M12.4 21 18.8 15" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>`),
+  rocket: toy(`<path d="M18.6 33.5h10.8l-2.1 5.6c-.9 2.4-2 4.2-3.3 5.6-1.3-1.4-2.4-3.2-3.3-5.6Z" fill="#ffc23a"/>
+    <path d="M21.2 33.5h5.6l-1 3.4c-.5 1.6-1.1 2.8-1.8 3.8-.7-1-1.3-2.2-1.8-3.8Z" fill="#fff1b8"/>
+    <path d="M15.2 23.5 8.6 30.2a2 2 0 0 0-.6 1.4v4.6c0 .8.9 1.3 1.6.9l5.6-3Z" fill="#f6968a"/>
+    <path d="M32.8 23.5l6.6 6.7c.4.4.6.9.6 1.4v4.6c0 .8-.9 1.3-1.6.9l-5.6-3Z" fill="#e8786a"/>
+    <path d="M24 4.6c5.9 4.4 8.8 11.2 8.8 19v10.6H15.2V23.6c0-7.8 2.9-14.6 8.8-19Z" fill="#f7f4ff"/>
+    <path d="M24 4.6c5.9 4.4 8.8 11.2 8.8 19v10.6h-5.6V23.6c0-7.6-1.2-13.9-3.2-19Z" fill="#ddd6f6"/>
+    <path d="M24 4.6c2.7 2 4.7 4.5 6.1 7.4H17.9c1.4-2.9 3.4-5.4 6.1-7.4Z" fill="#f68c7c"/>
+    <circle cx="24" cy="20" r="4.6" fill="#8fb1e6" stroke="#fff" stroke-width="2.2"/><circle cx="22.6" cy="18.6" r="1.2" fill="#fff" opacity="0.8"/>
+    <path d="M18.6 16.4c.4-1.6 1-3 1.8-4.2" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.8"/>`),
+  soundOn: speaker(true),
+  soundOff: speaker(false),
+  // The shop page's way back, and the climb's marks.
   flag: line('M6 21V3.8M6 4.6c3.1-1.7 5.6 1.5 8.7 0 1.2-.6 2.2-.7 3.3-.4v8.6c-1.1-.3-2.1-.2-3.3.4-3.1 1.5-5.6-1.7-8.7 0'),
   back: line('M14.8 5.4 8.2 12l6.6 6.6'),
   flame: line('M12 21c-3.5 0-5.9-2.3-5.9-5.4 0-3.3 2.6-4.9 3.4-7.7.7 1.5 1.5 2.4 2.5 2.8.2-2.7 1.5-5.3 4-7 0 2.9.9 4.6 2 6.3.9 1.4 1.4 2.7 1.4 4.3 0 3.6-2.7 6.7-7.4 6.7Z'),

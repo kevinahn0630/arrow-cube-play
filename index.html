@@ -57,6 +57,8 @@
   .hud-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .hud-icon { width: 46px; height: 46px; padding: 0; display: grid; place-items: center; color: var(--ink); pointer-events: auto; flex: none; }
   .hud-icon svg { width: 22px; height: 22px; }
+  .hud-icon svg.toy, .home-head .icon svg.toy { width: 32px; height: 32px; }
+  .home-head .icon { display: grid; place-items: center; }
   /* The sound button hangs under the home button in the top left corner, as the hearts do under the arrow count. */
   .hud-corner { position: relative; flex: none; }
   .hud-sound { position: absolute; top: calc(100% + 8px); left: 0; font-size: 20px; }
@@ -316,17 +318,20 @@
   .page-head .back svg { width: 26px; height: 26px; }
   .page .pill { background: #ffffffa8; border-color: #ffffffe6; box-shadow: 0 6px 16px #b48aa024; color: #5a4862; }
   .page-body { flex: 1; overflow: auto; padding: 6px 16px max(24px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
-  /* The home screen's tabs (2026-11-03): the shop, the worlds and the climb; on the
-     worlds' tab the daily gift's box floats at the side. */
-  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; justify-content: center; padding: 6px 10px max(8px, env(safe-area-inset-bottom)); background: #fffffff2; border-top: 1px solid #f3e4e8; box-shadow: 0 -8px 22px #b48aa01c; }
-  .tab { flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border: 0; border-radius: 0; background: none; font-size: 11px; font-weight: 700; color: #a594ad; }
-  .tab i { position: relative; display: grid; place-items: center; width: 56px; height: 30px; border-radius: 999px; }
-  .tab svg { width: 23px; height: 23px; }
+  /* The home screen's tabs (2026-11-03): the shop, the worlds and the climb, in a dock
+     floating over the bottom with toy icons, the tab picked raised in a white bubble (the
+     others faded); on the worlds' tab the daily gift's box floats at the side. */
+  .tabbar { position: fixed; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); z-index: 2; max-width: 520px; margin: 0 auto; display: flex; justify-content: center; padding: 4px 8px 6px; background: #fffffff2; border: 1px solid #fff; border-radius: 26px; box-shadow: 0 10px 28px #b48aa040; }
+  .tab { flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0 2px; border: 0; border-radius: 0; background: none; font-size: 11px; font-weight: 700; color: #a594ad; }
+  .tab i { display: grid; place-items: center; width: 52px; height: 38px; }
+  .tab svg { width: 32px; height: 32px; }
+  .tab:not(.on) svg { filter: grayscale(0.75); opacity: 0.6; }
   .tab.on { color: var(--accent); }
-  .tab.on i { background: #fde6e2; }
-  .home .home-body { padding-bottom: calc(max(8px, env(safe-area-inset-bottom)) + 76px); }
+  .tab.on i { width: 62px; height: 62px; margin: -30px 0 2px; border-radius: 50%; background: linear-gradient(180deg, #fff, #ffe9e2); border: 3px solid #f5a596; box-shadow: 0 8px 18px #e2786a52; }
+  .tab.on svg { width: 42px; height: 42px; }
+  .home .home-body { padding-bottom: calc(max(10px, env(safe-area-inset-bottom)) + 96px); }
   .home .home-body[hidden] { display: none; }
-  .gift-box { position: fixed; right: 14px; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 80px); z-index: 2; width: 58px; height: 58px; padding: 0; display: grid; place-items: center; border-radius: 20px; background: #fff; border: 1px solid #ffffffe6; box-shadow: 0 10px 24px #b48aa047; }
+  .gift-box { position: fixed; right: 14px; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 88px); z-index: 2; width: 58px; height: 58px; padding: 0; display: grid; place-items: center; border-radius: 20px; background: #fff; border: 1px solid #ffffffe6; box-shadow: 0 10px 24px #b48aa047; }
   .gift-box[hidden] { display: none; }
   .gift-box svg { width: 40px; height: 40px; }
   .gift-box .dot { position: absolute; top: -4px; right: -4px; width: 14px; height: 14px; border-radius: 50%; background: #ef5a4c; border: 2.5px solid #fff; display: none; }
@@ -356,7 +361,7 @@
   .climb-rules { display: flex; gap: 6px; margin: 10px 16px; }
   .climb-rules span { display: flex; align-items: center; gap: 4px; padding: 5px 10px 5px 8px; border-radius: 999px; background: #ffffffb0; font-size: 12px; font-weight: 700; color: #7c6a8c; }
   .climb-rules svg { width: 14px; height: 14px; color: var(--accent); }
-  .climb-scroll { flex: 1; min-height: 0; overflow: auto; margin-bottom: calc(max(8px, env(safe-area-inset-bottom)) + 56px); border-radius: 22px 22px 0 0; overscroll-behavior: contain; }
+  .climb-scroll { flex: 1; min-height: 0; overflow: auto; margin-bottom: calc(max(10px, env(safe-area-inset-bottom)) + 74px); border-radius: 22px; overscroll-behavior: contain; }
   .climb-scroll svg { display: block; width: 100%; height: auto; }
   /* A stage's card: the points it scored up the climb, the clears in a row and any
      rewards passed; 코인 사기 when the wallet is short. */
@@ -474,8 +479,8 @@
   <div class="hud">
     <div class="hud-left">
       <div class="hud-corner">
-        <button class="pill hud-icon" id="homeBtn" title="홈 화면으로" aria-label="홈 화면으로"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.5 12 4.2l8.5 7.3M6.4 9.6V20h11.2V9.6M10 20v-5.4h4V20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <button class="pill hud-icon hud-sound" id="sound" title="효과음 끄기">🔊</button>
+        <button class="pill hud-icon" id="homeBtn" title="홈 화면으로" aria-label="홈 화면으로"></button>
+        <button class="pill hud-icon hud-sound" id="sound" title="효과음 끄기"></button>
       </div>
       <button class="pill title" id="worldBtn" title="스테이지 선택"><span class="flag" id="worldFlag"></span><span class="title-text"><b id="world">집 안</b><small id="stageLabel"></small></span></button>
     </div>
@@ -574,7 +579,7 @@
       <div class="home-brand"><svg class="home-cube" aria-hidden="true"><use href="#cubeLogo"/></svg><svg class="home-word" viewBox="-8 -8 1010.23 116" role="img" aria-label="Arrow Cube"><use href="#wordLogo"/></svg></div>
       <div class="pill home-stars" id="homeStars"></div>
       <button class="pill home-coins" id="homeCoins" aria-label="상점"></button>
-      <button class="pill icon" id="homeSound" title="효과음 끄기">🔊</button>
+      <button class="pill icon" id="homeSound" title="효과음 끄기"></button>
     </header>
     <div class="home-body" id="homeBody"></div>
     <div class="home-body shop-tab" id="shopTab" hidden></div>
