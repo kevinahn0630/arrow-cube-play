@@ -1,13 +1,14 @@
 // Difficulty measured by play, not by puzzle shape. A simple virtual player looks at
-// the cube from one corner at a time, judges arrows by eye (sometimes wrongly), and we
-// count its wrong taps and turns. It plays by the same rules.js as the game, so every
-// gimmick is measured the same way.
-import { rng32, makeCube, generate } from './cube.js';
+// the cube (or solid) from one corner at a time, judges arrows by eye (sometimes
+// wrongly), and we count its wrong taps and turns. It plays by the same rules.js as
+// the game, so every gimmick is measured the same way.
+import { rng32, generate } from './cube.js';
+import { surfaceOf } from './shapes.js';
 import { newState, blockAt, group, remove, solve, pose, inDark, darkCell, charge, stuck, stuckWithout, deadEnd } from './rules.js';
 
-// The 8 corner views, each showing three faces (face order as in cube.js: +x,-x,+y,-y,+z,-z).
-const VIEWS = [];
-for (const x of [0, 1]) for (const y of [2, 3]) for (const z of [4, 5]) VIEWS.push([x, y, z]);
+// The 8 corner views, each showing three sides of the cube; on a solid, only the cells
+// no block stands in front of (cube.js seen).
+const VIEWS = 8;
 
 // How hard an arrow is to follow by eye: long bodies, ones that wrap over cube edges,
 // and exit paths bent by mirrors, carried by canals, turning back (boomerangs),
@@ -49,8 +50,8 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
 
   for (let r = 0; r < runs; r++) {
     const state = newState(puz);
-    // Dial arrows move, so which face shows their head is looked up as they are.
-    const headFace = (i) => cube.faceOf(pose(puz, state, i).cells.at(-1));
+    // Dial arrows move, so where their head is is looked up as they are.
+    const headCell = (i) => pose(puz, state, i).cells.at(-1);
     // Whether the dark leaves arrow i in doubt: its head is hidden (it could point
     // anywhere), or its way out runs into the dark before any blocker in plain sight
     // (something could stand there). Such an arrow can only be guessed at.
@@ -62,17 +63,33 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
       for (let k = 0; k <= (b ? b.k : ray.length - 1); k++) if (darkCell(puz, state, ray[k])) return true;
       return false;
     };
+    // On a solid, a way out that runs behind another block before any blocker in plain
+    // sight (it shows only faintly through the glass) is in doubt the same way. This is
+    // most of why a shape that is hard to take in by eye plays harder than its arrows
+    // alone (the user, 2026-11-04). A box hides nothing.
+    const hidden = (i) => {
+      if (cube.convex) return false;
+      const { ray } = pose(puz, state, i);
+      const b = blockAt(puz, state, i);
+      for (let k = 0; k <= (b ? b.k : ray.length - 1); k++) if (!cube.seen(view, ray[k])) return true;
+      return false;
+    };
+    const doubt = (i) => inDoubt(i) || hidden(i);
     const alive = new Set(arrows.keys());
     const known = new Set(); // arrows this player already found blocked, until something moves
     let restarts = 0;
-    let view = Math.floor(rnd() * VIEWS.length);
+    let view = Math.floor(rnd() * VIEWS);
     for (let guard = 0; alive.size && guard < 100000; guard++) {
-      // Arrows the dark leaves in doubt come last: the player only guesses at them when
-      // nothing in plain sight looks free.
+      // Arrows left in doubt come last: the player only guesses at them when nothing in
+      // plain sight looks free.
       const seen = shuffle(
-        [...alive].filter((i) => !known.has(i) && VIEWS[view].includes(headFace(i))),
+        [...alive].filter((i) => !known.has(i) && cube.seen(view, headCell(i))),
         rnd,
-      ).sort((x, y) => inDoubt(x) - inDoubt(y));
+      );
+      if (puz.darkOf || !cube.convex) {
+        const unsure = new Set(seen.filter(doubt));
+        seen.sort((x, y) => unsure.has(x) - unsure.has(y));
+      }
       let acted = false;
       for (const i of seen) {
         // A linked pair has to look free on both ends before the player taps it.
@@ -87,7 +104,7 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
           const b = blockAt(puz, state, j);
           const k = !b ? -1 : b.tile ? 0 : b.ice ? 2 : b.k;
           if (b) blocked = true;
-          const p = inDoubt(j) ? 0.35 : k < 0 ? spotFree(tangles[j]) : misjudge(k, tangles[j]);
+          const p = doubt(j) ? 0.35 : k < 0 ? spotFree(tangles[j]) : misjudge(k, tangles[j]);
           if (!(rnd() < p)) {
             looksFree = false;
             break;
@@ -121,7 +138,7 @@ export function evaluate(puz, { runs = 24, seed = 1 } = {}) {
       if (!acted) {
         // Stuck in this view: turn the cube. (The sun, the dials and the bell move by
         // themselves; nothing else needs a hand.)
-        view = (view + 1 + Math.floor(rnd() * (VIEWS.length - 1))) % VIEWS.length;
+        view = (view + 1 + Math.floor(rnd() * (VIEWS - 1))) % VIEWS;
         turns++;
       }
     }
@@ -214,7 +231,7 @@ export function gimmickShare(puz) {
 // wait on one another in the longest chain (most solve rounds); if none lands near,
 // the closest. Puzzles where the gimmick did not take are skipped.
 export function pickSeed(params, target, candidates = 12) {
-  const cube = makeCube(params.N);
+  const cube = surfaceOf(params);
   const better = (a, b) =>
     a.near !== b.near
       ? a.near

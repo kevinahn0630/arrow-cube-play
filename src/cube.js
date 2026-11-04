@@ -1,8 +1,10 @@
-// Cube-surface topology and puzzle generator. Pure logic, no rendering; the rules
-// for playing a generated puzzle live in rules.js.
+// Surface topology of the cube and of solids built from blocks, and the puzzle
+// generator. Pure logic, no rendering; the rules for playing a generated puzzle live in
+// rules.js.
 //
-// Coordinates are doubled so every cell center is an integer point: a face lies on
-// x, y or z = 0 or 2N, and its cell centers use odd values 1..2N-1 on the other two axes.
+// Coordinates are doubled so every cell center is an integer point: on the cube a face
+// lies on x, y or z = 0 or 2N, and its cell centers use odd values 1..2N-1 on the other
+// two axes.
 
 import { solve, newState, blockAt } from './rules.js';
 
@@ -69,56 +71,85 @@ export const GIMMICKS = [
 // links: one colour each. The game's palette has exactly this many colours.
 export const MAX_LINKS = 8;
 
-export function makeCube(N) {
+// The surface of a solid made of unit blocks [x, y, z] joined face to face, each
+// block `u` grid cells along an edge (the cube is one block: makeCube). Every block
+// face not against another block is cut into u×u cells. Coordinates are doubled as
+// for the cube: block v spans 2u·v to 2u·(v + 1) on each axis, so a cell centre is
+// even across its face and odd along it.
+//
+// Besides the cube's outer edges, blocks standing on a face make inner corners, where
+// the face meets a wall. A step over either is `wrapped`: a way out ends at both (an
+// arrow leaves an inner corner straight on, through the wall), and a discus climbing
+// on goes up the wall as it goes round an outer edge.
+export function makeSolid(blocks, u) {
+  const lo = [0, 1, 2].map((k) => Math.min(...blocks.map((v) => v[k])));
+  const voxels = blocks.map((v) => v.map((x, k) => x - lo[k]));
+  const size = [0, 1, 2].map((k) => 1 + Math.max(...voxels.map((v) => v[k])));
+  const solid = new Set(voxels.map(key));
+  const has = (v) => solid.has(key(v));
   const cells = [];
   const index = new Map();
-  for (let a = 0; a < 3; a++) {
-    for (const s of [1, -1]) {
-      const n = [0, 0, 0];
-      n[a] = s;
-      const b = (a + 1) % 3;
-      const c = (a + 2) % 3;
-      for (let i = 0; i < N; i++) {
-        for (let j = 0; j < N; j++) {
-          const p = [0, 0, 0];
-          p[a] = s > 0 ? 2 * N : 0;
-          p[b] = 2 * i + 1;
-          p[c] = 2 * j + 1;
-          index.set(key(p), cells.length);
-          cells.push({ id: cells.length, p, n });
+  for (const v of voxels) {
+    for (let a = 0; a < 3; a++) {
+      for (const s of [1, -1]) {
+        const n = [0, 0, 0];
+        n[a] = s;
+        if (has(add(v, n))) continue;
+        const b = (a + 1) % 3;
+        const c = (a + 2) % 3;
+        for (let i = 0; i < u; i++) {
+          for (let j = 0; j < u; j++) {
+            const p = [0, 0, 0];
+            p[a] = 2 * u * (v[a] + (s > 0 ? 1 : 0));
+            p[b] = 2 * u * v[b] + 2 * i + 1;
+            p[c] = 2 * u * v[c] + 2 * j + 1;
+            index.set(key(p), cells.length);
+            cells.push({ id: cells.length, p, n });
+          }
         }
       }
     }
   }
-  const perFace = N * N;
+  // The cell centred on p whose face looks along n, if there is one.
+  const cellAt = (p, n) => {
+    const id = index.get(key(p));
+    return id !== undefined && dot(cells[id].n, n) === 1 ? id : undefined;
+  };
 
-  // Move one cell from `id` along tangent `t`. Crossing an edge lands on the
-  // neighbouring face, and the travel direction turns to point away from the old face.
-  // Generating takes steps very often, so each (cell, tangent) is worked out once; the
-  // results are shared, so callers must not change them.
+  // Move one cell from `id` along tangent `t`. Where the face ends, the step lands on
+  // the face round an outer edge, travelling away from the old face, or on the wall at
+  // an inner corner, travelling up it. Where two blocks only meet along an edge, it
+  // keeps to its own block. Generating takes steps very often, so each (cell, tangent)
+  // is worked out once; the results are shared, so callers must not change them.
   const steps = [];
   function step(id, t) {
     const ax = axisOf(t);
     const k = 6 * id + 2 * ax + (t[ax] > 0 ? 0 : 1);
     if (steps[k]) return steps[k];
     const { p, n } = cells[id];
-    const q = add(p, scale(t, 2));
+    const edge = add(p, t);
+    const flat = cellAt(add(edge, t), n);
+    const down = scale(n, -1);
+    const outer = flat === undefined ? cellAt(add(edge, down), t) : undefined;
     steps[k] =
-      q[ax] > 0 && q[ax] < 2 * N
-        ? { id: index.get(key(q)), dir: t, wrapped: false }
-        : { id: index.get(key(add(add(p, t), scale(n, -1)))), dir: scale(n, -1), wrapped: true };
+      flat !== undefined
+        ? { id: flat, dir: t, wrapped: false }
+        : outer !== undefined
+          ? { id: outer, dir: down, wrapped: true }
+          : { id: cellAt(add(edge, n), scale(t, -1)), dir: n, wrapped: true, inner: true };
     return steps[k];
   }
 
   // Exit path of a head moving along `d`: the cells it crosses, nearest first, the
-  // direction it finally leaves a face edge in, and `jumps`: the ray indices reached
+  // direction it finally leaves a face in, and `jumps`: the ray indices reached
   // through a tunnel rather than by a step. On the way, mirror cells (cell → diagonal
   // vector) turn it, canal cells (cell → flow direction) send it along the flow, and
-  // a tunnel mouth (cell → other mouth) moves it to the other mouth. Arrows leave the
-  // cube at the face edge, except that the path may carry on over `wraps` edges
-  // first (a discus), or a boomerang (`boomerang`: the side to come back on) turns
-  // back one lane over. A diagonal `d` runs corner-wise within the face. null if the
-  // path never gets out.
+  // a tunnel mouth (cell → other mouth) moves it to the other mouth. Arrows leave
+  // where the face ends, except that the path may carry on over `wraps` edges first
+  // (a discus), or a boomerang (`boomerang`: the side to come back on) turns back one
+  // lane over. A diagonal `d` runs corner-wise within the face. null if the path
+  // never gets out.
+  const longest = (2 * cells.length) / 3; // 4·N² on the cube
   function trace(id, d, { mirrors, tunnels, canals, wraps = 0, boomerang = null } = {}) {
     const ray = [];
     const jumps = [];
@@ -126,13 +157,13 @@ export function makeCube(N) {
     let dir = d;
     if (d.filter(Boolean).length === 2) {
       for (;;) {
-        const next = index.get(key(add(cells[cur].p, scale(d, 2))));
+        const next = cellAt(add(cells[cur].p, scale(d, 2)), cells[cur].n);
         if (next === undefined) return { ray, exitDir: d, jumps };
         ray.push(next);
         cur = next;
       }
     }
-    for (let guard = 0; guard <= 4 * perFace; guard++) {
+    for (let guard = 0; guard <= longest; guard++) {
       const r = step(cur, dir);
       if (r.wrapped && boomerang) {
         const s = step(cur, boomerang);
@@ -176,10 +207,88 @@ export function makeCube(N) {
   });
   const tangents = (id) => tangentsBy[axisOf(cells[id].n)];
 
-  const faceOf = (id) => Math.floor(id / perFace);
+  // Faces: the flat stretches of surface, numbered in cell order (on the cube +x, −x,
+  // +y, −y, +z, −z), each with its plane: the normal, and where it crosses that axis.
+  const faceIds = new Int32Array(cells.length).fill(-1);
+  const planes = [];
+  for (const { id, p, n } of cells) {
+    if (faceIds[id] >= 0) continue;
+    faceIds[id] = planes.length;
+    const todo = [id];
+    while (todo.length) {
+      const c = todo.pop();
+      for (const t of tangents(c)) {
+        const r = step(c, t);
+        if (r.wrapped || faceIds[r.id] >= 0) continue;
+        faceIds[r.id] = planes.length;
+        todo.push(r.id);
+      }
+    }
+    planes.push({ n, at: p[axisOf(n)] });
+  }
+  const faceOf = (id) => faceIds[id];
+  // The way a cell's face looks, numbered like the cube's faces.
+  const sideOf = (id) => {
+    const { n } = cells[id];
+    const a = axisOf(n);
+    return 2 * a + (n[a] > 0 ? 0 : 1);
+  };
 
-  return { N, cells, index, count: cells.length, step, trace, tangents, faceOf };
+  // Whether a cell shows from far off in each of the 8 corner directions (difficulty.js
+  // views, in the order x, y, z each + then −): its face looks that way and no block
+  // stands in front of it. Worked out for a direction the first time it is asked. A
+  // cell no corner sees past the blocks (the middle of the floor between a U's arms)
+  // shows from those its face looks toward: a player turns the solid until it does.
+  const corners = [];
+  for (const x of [1, -1]) for (const y of [1, -1]) for (const z of [1, -1]) corners.push([x, y, z]);
+  const shown = [];
+  const look = (v) => (shown[v] ??= Uint8Array.from(cells, (c) => dot(c.n, corners[v]) > 0 && clear(c.p, corners[v])));
+  let blind;
+  function seen(view, id) {
+    if (look(view)[id]) return true;
+    blind ??= Uint8Array.from(cells, (c, i) => corners.every((d, v) => !look(v)[i]));
+    return blind[id] === 1 && dot(cells[id].n, corners[view]) > 0;
+  }
+  // Whether the line from surface point p along d (each ±1) meets no block: it is
+  // followed from one block boundary it crosses to the next.
+  function clear(p, d) {
+    const m = 2 * u;
+    for (let t = 0; ; ) {
+      let next = Infinity;
+      for (let k = 0; k < 3; k++) {
+        const x = p[k] + t * d[k];
+        const bound = d[k] > 0 ? (Math.floor(x / m) + 1) * m : (Math.ceil(x / m) - 1) * m;
+        next = Math.min(next, (bound - p[k]) / d[k]);
+      }
+      const v = p.map((x, k) => Math.floor((x + ((t + next) / 2) * d[k]) / m));
+      if (v.some((x, k) => x < 0 || x >= size[k])) return true;
+      if (has(v)) return false;
+      t = next;
+    }
+  }
+
+  return {
+    // N: the side of a cube with as many cells, which sizes gimmicks
+    N: Math.round(Math.sqrt(cells.length / 6)),
+    u,
+    voxels,
+    size, // blocks along x, y and z
+    convex: voxels.length === size[0] * size[1] * size[2], // a box: no face hides another
+    cells,
+    index,
+    count: cells.length,
+    faces: planes.length,
+    planes,
+    step,
+    trace,
+    tangents,
+    faceOf,
+    sideOf,
+    seen,
+  };
 }
+
+export const makeCube = (N) => makeSolid([[0, 0, 0]], N);
 
 // Builds arrows in reverse play order: each new arrow's exit path must be clear of
 // every arrow placed before it. Removing them last-placed-first then always works,
@@ -280,7 +389,7 @@ export function generate(
   let budget = cube.count * (40 + 8 * (tries - 1));
   let filled = 0;
   let hues = 0;
-  const tilesOnFace = new Int32Array(6);
+  const tilesOnFace = new Int32Array(cube.faces);
   let tiles = 0;
   // Whether one more tile fits on cell c's face without that face going over a
   // quarter of all tiles.
@@ -733,7 +842,7 @@ export function generate(
     let best = null;
     let bestScore = -Infinity;
     // Arrows nothing stands in the way of yet, by the face their head is on.
-    const freeOn = new Int32Array(6);
+    const freeOn = new Int32Array(cube.faces);
     if (turn) for (let o = 0; o < arrows.length; o++) if (!heldNow(o)) freeOn[faceOfHead(o)]++;
     for (let t = 0; t < n && budget > 0; t++, budget--) {
       const cand = make();

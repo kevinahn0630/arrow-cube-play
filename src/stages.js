@@ -2,13 +2,25 @@
 // the virtual player's expected wrong taps; tools/bake-stages.mjs picks the generated
 // candidate closest to it and stores its seed in stage-seeds.js.
 //
-//  N: grid per face   len: [min, max] arrow length   straight: chance to keep going
+//  N: grid per face (on a solid, grid cells along a block's edge)
+//  shape: the solid the puzzle is on (shapes.js), none for the cube
+//  len: [min, max] arrow length   straight: chance to keep going
 //  wrap: preference for crossing cube edges   block: how much arrows block each other
 //  deep: how long the chains of arrows waiting on one another get, across faces
 //  long: how strongly long arrows are preferred (fewer short ones)
 //  gimmick / amount: which gimmick and how much of it (see cube.js)
+import { SHAPES } from './shapes.js';
 
-// 집 안 (home): hand-tuned, no gimmick.
+// Stages 1–8 of a world are cubes and the rest solids (the user, 2026-11-04). A solid
+// that is harder to take in by eye plays harder than its puzzle measures, so the
+// difficulty need not climb in a straight line: a stage on a medium shape aims at 85%
+// of the curve's wrong taps, on a hard one at 70%.
+const EASE = { easy: 1, medium: 0.85, hard: 0.7 };
+const solid = (shape, stage) => ({ ...stage, shape, target: Math.round(stage.target * EASE[SHAPES[shape].level] * 10) / 10 });
+
+// 집 안 (home): hand-tuned, no gimmick. The solids grow over 9–15 as the cube did (a
+// hard one drawn coarser, which also reads better), with settings eased where a big one
+// would overshoot its target; most hold more arrows than the cubes they replace.
 const HOME = [
   { N: 4, len: [3, 6], straight: 0.6, wrap: 0.1, block: 0.6, deep: 0, long: 0, target: 2 },
   { N: 4, len: [3, 7], straight: 0.6, wrap: 0.15, block: 0.8, deep: 0.1, long: 0, target: 2.5 },
@@ -18,13 +30,13 @@ const HOME = [
   { N: 6, len: [3, 9], straight: 0.5, wrap: 0.3, block: 1, deep: 0.5, long: 0.3, target: 12 },
   { N: 7, len: [3, 9], straight: 0.55, wrap: 0.35, block: 1, deep: 0.6, long: 0.35, target: 20 },
   { N: 7, len: [4, 10], straight: 0.5, wrap: 0.35, block: 1, deep: 0.65, long: 0.45, target: 23 },
-  { N: 8, len: [4, 10], straight: 0.55, wrap: 0.4, block: 1, deep: 0.7, long: 0.5, target: 38 },
-  { N: 8, len: [4, 11], straight: 0.5, wrap: 0.45, block: 1, deep: 0.75, long: 0.6, target: 48 },
-  { N: 9, len: [4, 11], straight: 0.55, wrap: 0.45, block: 1, deep: 0.8, long: 0.65, target: 60 },
-  { N: 10, len: [4, 12], straight: 0.5, wrap: 0.5, block: 1, deep: 0.85, long: 0.75, target: 71 },
-  { N: 11, len: [4, 12], straight: 0.5, wrap: 0.5, block: 1, deep: 0.9, long: 0.8, target: 125 },
-  { N: 12, len: [4, 12], straight: 0.5, wrap: 0.55, block: 1, deep: 0.95, long: 0.9, target: 175 },
-  { N: 13, len: [5, 13], straight: 0.5, wrap: 0.55, block: 1, deep: 1, long: 1, target: 190 },
+  solid('slab', { N: 4, len: [4, 10], straight: 0.55, wrap: 0.4, block: 1, deep: 0.7, long: 0.5, target: 38 }),
+  solid('ell', { N: 4, len: [4, 11], straight: 0.5, wrap: 0.45, block: 1, deep: 0.75, long: 0.6, target: 48 }),
+  solid('tower', { N: 6, len: [4, 11], straight: 0.55, wrap: 0.45, block: 0.8, deep: 0.5, long: 0.4, target: 60 }),
+  solid('stairs', { N: 4, len: [4, 12], straight: 0.5, wrap: 0.5, block: 0.8, deep: 0.5, long: 0.4, target: 71 }),
+  solid('cup', { N: 5, len: [4, 12], straight: 0.5, wrap: 0.5, block: 0.75, deep: 0.35, long: 0.3, target: 125 }),
+  solid('heart', { N: 4, len: [4, 12], straight: 0.5, wrap: 0.55, block: 1, deep: 0.95, long: 0.9, target: 175 }),
+  solid('cross', { N: 6, len: [5, 13], straight: 0.5, wrap: 0.55, block: 0.85, deep: 0.5, long: 0.4, target: 190 }),
 ];
 
 // Gimmick worlds: 40 stages along one curve, t from 0 to 1. The cube grows from 6 to

@@ -567,7 +567,13 @@
       </select>
     </div>
     <div class="row"><label>기믹 양 <output id="o_amount"></output></label><input type="range" id="amount" min="0" max="100"></div>
-    <div class="row"><label>격자 크기 (한 면 N×N) <output id="o_N"></output></label><input type="range" id="N" min="3" max="16"></div>
+    <div class="row">
+      <label>모양</label>
+      <select id="shape">
+        <option value="">큐브</option>
+      </select>
+    </div>
+    <div class="row"><label><span id="nLabel">격자 크기 (한 면 N×N)</span> <output id="o_N"></output></label><input type="range" id="N" min="3" max="16"></div>
     <div class="row"><label>화살표 최소 길이 <output id="o_minLen"></output></label><input type="range" id="minLen" min="2" max="10"></div>
     <div class="row"><label>화살표 최대 길이 <output id="o_maxLen"></output></label><input type="range" id="maxLen" min="2" max="40"></div>
     <div class="row"><label>직진 확률 (낮을수록 많이 꺾임) <output id="o_straight"></output></label><input type="range" id="straight" min="0" max="100"></div>

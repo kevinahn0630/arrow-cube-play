@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
-import { makeCube, generate, add, scale, cross, axisOf } from './cube.js';
+import { generate, add, scale, dot, cross, axisOf } from './cube.js';
+import { SHAPES, surfaceOf } from './shapes.js';
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, cutBy, darkCell, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
@@ -20,7 +21,7 @@ import { scenery } from './scenery.js';
 import { wakeAudio, playLeave, playBump, isMuted, setMuted } from './sound.js';
 import { DEV } from './build.js';
 
-const S = 4; // cube edge length in world units
+const S = 4; // cube edge length in world units (solids are scaled to the same size: fitTo)
 const BOLD = 1.5; // how thick arrows and their heads are drawn, against the first design
 const SPEED = 56; // doubled grid units per second (28 cells/s)
 // Colours of the current world's theme (themes.js), set by applyTheme.
@@ -67,6 +68,149 @@ const edges = new THREE.LineSegments(
   new THREE.LineBasicMaterial({ color: 0xb9c3e6, transparent: true, opacity: 0.8 }),
 );
 scene.add(edges);
+// On a solid whose blocks hide some of its faces from some sides, what lies behind the
+// glass nearest the camera draws as a ghost, as the back of the cube does: glassDepth
+// puts that glass in the depth buffer first, then every arrow (and the decor) is drawn
+// once more in the ghost colour where it lies behind it (arrowMesh) and the edges
+// there fainter, and then as usual where it does not. The cube and the box shapes hide
+// no face and skip all this.
+const glassDepth = new THREE.Mesh(
+  box.geometry,
+  new THREE.MeshBasicMaterial({ colorWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
+);
+glassDepth.renderOrder = -2;
+const ghostMat = new THREE.MeshBasicMaterial({ depthFunc: THREE.GreaterDepth, depthWrite: false, side: THREE.DoubleSide });
+// Blended like the edges in front, yet drawn before the arrows (so not `transparent`).
+const edgesBehind = new THREE.LineSegments(
+  edges.geometry,
+  new THREE.LineBasicMaterial({
+    blending: THREE.CustomBlending,
+    blendSrcAlpha: THREE.OneFactor,
+    blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+    depthFunc: THREE.GreaterDepth,
+    depthWrite: false,
+  }),
+);
+edgesBehind.renderOrder = -1;
+let hiding = false; // the puzzle's surface has faces that can hide others
+
+// How the surface sits in the scene: centred on the smallest ball round it, and on a
+// solid a little narrower than the cube looks from the starting view (its outline is
+// less even) and at most a quarter taller (a phone screen has the room), yet never
+// past the ball the cube turns in, whichever way it is turned. A shape whose box has
+// empty corners (the cross) turns in a smaller ball than its box's and so shows bigger.
+// `mid` is its centre in doubled grid coordinates and `k` world units per doubled grid
+// unit, so a cell is 2k across (S/N on the cube).
+let fit = { mid: [0, 0, 0], k: 1 };
+const SCREEN_X = new THREE.Vector3(0, 1, 0).cross(HOME_VIEW).normalize();
+const SCREEN_Y = HOME_VIEW.clone().cross(SCREEN_X).normalize();
+// How far the corners of blocks (doubled grid coordinates, about their centre) reach
+// across and up the screen from the starting view.
+function spread(corners) {
+  const v = new THREE.Vector3();
+  let wide = 0;
+  let tall = 0;
+  for (const c of corners) {
+    v.set(...c);
+    wide = Math.max(wide, Math.abs(v.dot(SCREEN_X)));
+    tall = Math.max(tall, Math.abs(v.dot(SCREEN_Y)));
+  }
+  return { wide, tall };
+}
+const CUBE_SPREAD = spread([[-1, -1, -1], [-1, -1, 1], [-1, 1, -1], [-1, 1, 1], [1, -1, -1], [1, -1, 1], [1, 1, -1], [1, 1, 1]]);
+// The centre of the smallest ball round some points: step towards the farthest point by
+// less and less (Bădoiu–Clarkson: after n steps within radius/√n of it), then snap to
+// an eighth of a block (u/4 doubled units), so a symmetric shape gets its exact middle.
+function ballCentre(points, u) {
+  let c = points[0];
+  for (let i = 1; i <= 10000; i++) {
+    let far = c;
+    let most = -1;
+    for (const p of points) {
+      const d = (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2;
+      if (d > most) {
+        most = d;
+        far = p;
+      }
+    }
+    c = c.map((x, a) => x + (far[a] - x) / (i + 1));
+  }
+  return c.map((x) => (Math.round((4 * x) / u) * u) / 4);
+}
+function fitTo(cube) {
+  const { voxels, u } = cube;
+  if (voxels.length === 1) {
+    const mid = cube.size.map((n) => n * u);
+    fit = { mid, k: (S * Math.sqrt(3)) / 2 / Math.hypot(...mid) };
+    return;
+  }
+  const corners = new Map();
+  for (const v of voxels) {
+    for (const x of [0, 1]) for (const y of [0, 1]) for (const z of [0, 1]) {
+      const p = [x, y, z].map((e, a) => 2 * u * (v[a] + e));
+      corners.set(p.join(), p);
+    }
+  }
+  const mid = ballCentre([...corners.values()], u);
+  const away = [...corners.values()].map((p) => p.map((x, a) => x - mid[a]));
+  const ball = (S * Math.sqrt(3)) / 2 / Math.max(...away.map((p) => Math.hypot(...p)));
+  const { wide, tall } = spread(away);
+  const side = S / 2; // the cube's corners are this far from its centre along each axis
+  fit = { mid, k: Math.min(ball, (0.92 * side * CUBE_SPREAD.wide) / wide, (1.25 * side * CUBE_SPREAD.tall) / tall) };
+}
+const cellSize = () => 2 * fit.k;
+
+// The glass of the puzzle's surface: each open block face as two triangles (counter-
+// clockwise seen from outside), and its edges wherever the surface bends, at an outer
+// edge or an inner corner.
+function shapeGlass(cube) {
+  const { voxels, u } = cube;
+  const solid = new Set(voxels.map((v) => v.join(',')));
+  const has = (v) => solid.has(v.join(','));
+  const m = 2 * u;
+  const tris = [];
+  const lines = [];
+  const drawn = new Set();
+  for (const v of voxels) {
+    for (let a = 0; a < 3; a++) {
+      for (const s of [1, -1]) {
+        const n = [0, 0, 0];
+        n[a] = s;
+        if (has(add(v, n))) continue;
+        const b = (a + 1) % 3;
+        const c = (a + 2) % 3;
+        const at = (i, j) => {
+          const p = [0, 0, 0];
+          p[a] = m * (v[a] + (s > 0 ? 1 : 0));
+          p[b] = m * (v[b] + i);
+          p[c] = m * (v[c] + j);
+          return p;
+        };
+        const q = s > 0 ? [at(0, 0), at(1, 0), at(1, 1), at(0, 1)] : [at(0, 0), at(0, 1), at(1, 1), at(1, 0)];
+        tris.push(...[q[0], q[1], q[2], q[0], q[2], q[3]].map(world));
+        for (const [axis, side, p, r] of [[b, 1, at(1, 0), at(1, 1)], [b, -1, at(0, 0), at(0, 1)], [c, 1, at(0, 1), at(1, 1)], [c, -1, at(0, 0), at(1, 0)]]) {
+          const t = [0, 0, 0];
+          t[axis] = side;
+          if (has(add(v, t)) && !has(add(add(v, t), n))) continue;
+          const id = [p.join(), r.join()].sort().join(' ');
+          if (drawn.has(id)) continue;
+          drawn.add(id);
+          lines.push(world(p), world(r));
+        }
+      }
+    }
+  }
+  box.geometry.dispose();
+  box.geometry = glassDepth.geometry = new THREE.BufferGeometry().setFromPoints(tris);
+  edges.geometry.dispose();
+  edges.geometry = edgesBehind.geometry = new THREE.BufferGeometry().setFromPoints(lines);
+  hiding = !cube.convex;
+  for (const o of [glassDepth, edgesBehind]) {
+    if (hiding) scene.add(o);
+    else scene.remove(o);
+  }
+  decor.userData.ghost.visible = hiding;
+}
 
 // Switch to a world's look: page background, cube glass and every colour things are
 // drawn in. Callers redraw afterwards.
@@ -124,6 +268,9 @@ function applyTheme(t) {
   box.material.color.set(t.box.face);
   box.material.opacity = t.box.faceOpacity;
   edges.material.color.set(t.box.edge);
+  edgesBehind.material.color.set(t.box.edge);
+  edgesBehind.material.opacity = edges.material.opacity;
+  ghostMat.color.copy(COLOR.back);
 }
 
 // In the app, Android draws the page under the status bar, so its icons sit on the sky:
@@ -165,28 +312,44 @@ function fadeScenery() {
   $('scenery').style.opacity = o;
 }
 const arrowMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
-const decor = new THREE.Mesh(new THREE.BufferGeometry(), arrowMat); // mirrors, guards, gates
+// A mesh drawn like an arrow, with its ghost (see glassDepth): a child sharing its
+// geometry, which setGeometry swaps along with it.
+function arrowMesh() {
+  const mesh = new THREE.Mesh(new THREE.BufferGeometry(), arrowMat);
+  const ghost = new THREE.Mesh(mesh.geometry, ghostMat);
+  ghost.renderOrder = -1;
+  ghost.visible = hiding;
+  mesh.add(ghost);
+  mesh.userData.ghost = ghost;
+  return mesh;
+}
+const decor = arrowMesh(); // mirrors, guards, gates
 scene.add(decor);
 // The tutorial's lit arrow: a pulsing glow round it.
 const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
 const glow = new THREE.Mesh(new THREE.BufferGeometry(), glowMat);
 scene.add(glow);
 
-// Faces in cube.js order: +x, -x, +y, -y, +z, -z. `facing` is a bitmask of the ones
-// turned toward the camera; things on the others draw as see-through ghosts.
-const FACES = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-const faceIdx = (n) => axisOf(n) * 2 + (n[axisOf(n)] > 0 ? 0 : 1);
-const isFacing = (face) => face < 0 || ((facing >> face) & 1) === 1;
-let facing = -1;
+// The faces of the puzzle's surface (cube.js faceOf; on the cube +x, -x, +y, -y, +z,
+// -z) turned toward the camera, one entry each; things on the others draw as
+// see-through ghosts. Until a puzzle is shown, every face counts as facing.
+let facing = new Uint8Array(0);
+const isFacing = (face) => face < 0 || facing[face] !== 0;
 
-function facingMask() {
-  const c = camera.position;
-  let m = 0;
-  FACES.forEach((n, i) => {
-    const h = S / 2;
-    if (n[0] * (c.x - n[0] * h) + n[1] * (c.y - n[1] * h) + n[2] * (c.z - n[2] * h) > 0) m |= 1 << i;
+// Works `facing` out again; whether any face turned toward or away from the camera.
+function turnFaces() {
+  const planes = game.puz?.cube.planes ?? [];
+  let changed = facing.length !== planes.length;
+  if (changed) facing = new Uint8Array(planes.length);
+  planes.forEach(({ n, at }, i) => {
+    const a = axisOf(n);
+    const v = n[a] * (camera.position.getComponent(a) - (at - fit.mid[a]) * fit.k) > 0 ? 1 : 0;
+    if (facing[i] !== v) {
+      facing[i] = v;
+      changed = true;
+    }
   });
-  return m;
+  return changed;
 }
 
 // ---------- game state
@@ -229,9 +392,8 @@ const game = {
 };
 
 function world(p) {
-  const N = game.puz.cube.N;
-  const k = S / (2 * N);
-  return new THREE.Vector3((p[0] - N) * k, (p[1] - N) * k, (p[2] - N) * k);
+  const { mid, k } = fit;
+  return new THREE.Vector3((p[0] - mid[0]) * k, (p[1] - mid[1]) * k, (p[2] - mid[2]) * k);
 }
 
 // Where a cell of the cube shows on the screen, in CSS pixels (for fx.js effects).
@@ -273,11 +435,18 @@ function setGeometry(mesh, pos, col) {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   mesh.geometry.dispose();
   mesh.geometry = g;
+  if (mesh.userData.ghost) mesh.userData.ghost.geometry = g;
 }
 
+// Where a line over the surface turns from cell a's face onto cell b's: the outer edge
+// between them, or the inner corner at the foot of the wall b is on.
+const turnPoint = (a, b) => add(a.p, scale(b.n, dot(b.p, b.n) < dot(a.p, b.n) ? -1 : 1));
+const bent = (a, b) => dot(a.n, b.n) !== 1;
+
 // Path an arrow travels when it leaves: its own cells tail→head, its exit path
-// (bending at mirrors), then straight off the face edge. Points are doubled grid
-// coordinates; each segment remembers the face it lies on (-1 once off the cube).
+// (bending at mirrors), then straight off where the face ends (on a solid, at an inner
+// corner, through the wall). Points are doubled grid coordinates; each segment
+// remembers the face it lies on (cube.js faceOf; -1 once off the surface).
 function buildTrack(cube, ar) {
   const C = cube.cells;
   const { cells } = ar;
@@ -287,29 +456,29 @@ function buildTrack(cube, ar) {
   for (let i = 1; i < cells.length; i++) {
     const a = C[cells[i - 1]];
     const b = C[cells[i]];
-    if (faceIdx(a.n) !== faceIdx(b.n)) {
-      pts.push({ p: add(a.p, b.n), cell: false });
-      segs.push({ face: faceIdx(a.n), n: a.n });
+    if (bent(a, b)) {
+      pts.push({ p: turnPoint(a, b), cell: false });
+      segs.push({ face: cube.faceOf(a.id), n: a.n });
     }
     pts.push({ p: b.p, cell: true });
-    segs.push({ face: faceIdx(b.n), n: b.n });
+    segs.push({ face: cube.faceOf(b.id), n: b.n });
   }
   const headAt = pts.length - 1;
   let prev = head;
   ar.ray.forEach((id, k) => {
     const b = C[id];
-    if (faceIdx(prev.n) !== faceIdx(b.n)) {
-      pts.push({ p: add(prev.p, b.n), cell: false });
-      segs.push({ face: faceIdx(prev.n), n: prev.n });
+    if (bent(prev, b)) {
+      pts.push({ p: turnPoint(prev, b), cell: false });
+      segs.push({ face: cube.faceOf(prev.id), n: prev.n });
     }
     pts.push({ p: b.p, cell: true });
     // The stretch between two tunnel mouths runs underground and is not drawn.
-    segs.push({ face: faceIdx(b.n), n: b.n, hidden: ar.jumps.includes(k) });
+    segs.push({ face: cube.faceOf(b.id), n: b.n, hidden: ar.jumps.includes(k) });
     prev = b;
   });
   const last = prev.p;
   pts.push({ p: add(last, ar.exitDir), cell: false });
-  segs.push({ face: faceIdx(prev.n), n: prev.n });
+  segs.push({ face: cube.faceOf(prev.id), n: prev.n });
   pts.push({ p: add(last, scale(ar.exitDir, 1 + 2 * (cells.length + 3))), cell: false });
   segs.push({ face: -1, n: prev.n });
 
@@ -372,7 +541,7 @@ function colorOf(ar, face) {
 // With `lit`, draws the tutorial's glow round the arrow instead: the same shape,
 // lit.widen times as wide and just under it, added to lit.pos / lit.col.
 function drawArrow(ar, lit = null) {
-  const cs = S / game.puz.cube.N;
+  const cs = cellSize();
   // Same stroke on every grid size; only very dense grids go thinner.
   // Lines and heads half as thick again as at first (BOLD), bolder still on small cells.
   const line = Math.min(cs * 0.085 * BOLD * game.thick, 0.04 * BOLD);
@@ -388,7 +557,7 @@ function drawArrow(ar, lit = null) {
   const inShadow = (p, sg) => {
     if (!hide || sg.face < 0) return false;
     const a = axisOf(sg.n);
-    const q = p.map((v, k) => (k === a ? (sg.n[a] > 0 ? 2 * N : 0) : Math.min(2 * N - 1, Math.max(1, 2 * Math.floor(v / 2) + 1))));
+    const q = p.map((v, k) => (k === a ? game.puz.cube.planes[sg.face].at : Math.min(2 * N - 1, Math.max(1, 2 * Math.floor(v / 2) + 1))));
     return darkCell(game.puz, game.state, game.puz.cube.index.get(q.join(',')));
   };
   const tr = ar.track;
@@ -707,7 +876,7 @@ function drawMarks(ar, { pos, col, eps, a, hw, H, d, side, tr, out, segIdx, shaf
 // panels, ice, and the pieces samurais cut off.
 function drawDecor() {
   const { cube, mirrors, guards, curtains, tunnels, canals, sundial, dials, walls, panels, arrows } = game.puz;
-  const cs = S / cube.N;
+  const cs = cellSize();
   const eps = S * 0.004;
   const pos = [];
   const col = [];
@@ -716,7 +885,7 @@ function drawDecor() {
   const cellInfo = (id) => {
     const { p, n } = cube.cells[id];
     const u = cube.tangents(id)[0];
-    return { C: world(p), n, u: new THREE.Vector3(...u), v: new THREE.Vector3(...cross(n, u)), face: faceIdx(n) };
+    return { C: world(p), n, u: new THREE.Vector3(...u), v: new THREE.Vector3(...cross(n, u)), face: cube.faceOf(id) };
   };
   const tint = (face, c) => (isFacing(face) ? c : COLOR.back);
   const square = ({ C, n, u }, half, c, lift) =>
@@ -790,7 +959,7 @@ function drawDecor() {
     const u = Math.max(0, (now - pc.t0) / CUT_MS);
     game.falling = true;
     for (let i = 1; i < pc.pts.length; i++) {
-      const c = isFacing(faceIdx(pc.pts[i].n)) ? pc.color : COLOR.back;
+      const c = isFacing(pc.pts[i].face) ? pc.color : COLOR.back;
       strip(pos, col, world(pc.pts[i - 1].p), world(pc.pts[i].p), pc.pts[i].n, line * (1 - u), eps, c, line * (1 - u), line * (1 - u));
     }
     if (now < pc.t0 || pc.wipe) continue;
@@ -804,12 +973,12 @@ function drawDecor() {
   for (const pnl of panels ?? []) {
     const shut = pnl.cells.some((id) => game.state.occ[id] >= 0);
     const { p: p0, n } = cube.cells[pnl.cells[0]];
-    const face = faceIdx(n);
+    const face = cube.faceOf(pnl.cells[0]);
     if (shut && isFacing(face)) for (const id of pnl.cells) square(cellInfo(id), cs * 0.5, PANEL[pnl.hue], eps * 0.2);
     const hw = cs * (shut ? 0.055 : 0.02);
     const a = axisOf(n);
     const [b, d] = [0, 1, 2].filter((x) => x !== a);
-    const inset = (hw * 2 * cube.N) / S; // in doubled grid units
+    const inset = hw / fit.k; // in doubled grid units
     const span = (x) => {
       const vs = pnl.cells.map((id) => cube.cells[id].p[x]);
       return [Math.min(...vs) - 1 + inset, Math.max(...vs) + 1 - inset];
@@ -939,7 +1108,7 @@ function makeLabels() {
     l.mesh.material.dispose();
   }
   const { cube, walls } = game.puz;
-  const cs = S / cube.N;
+  const cs = cellSize();
   for (const w of walls ?? []) {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 128;
@@ -947,9 +1116,10 @@ function makeLabels() {
     map.colorSpace = THREE.SRGBColorSpace;
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cs, cs), new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }));
     mesh.matrixAutoUpdate = false;
-    const { p, n } = cube.cells[w.cells[Math.floor(w.cells.length / 2)]];
+    const cell = w.cells[Math.floor(w.cells.length / 2)];
+    const { p, n } = cube.cells[cell];
     const normal = new THREE.Vector3(...n);
-    labels.push({ mesh, canvas, wall: w, n: normal, at: world(p).addScaledVector(normal, S * 0.004 * 1.3), text: '' });
+    labels.push({ mesh, canvas, wall: w, n: normal, face: cube.faceOf(cell), at: world(p).addScaledVector(normal, S * 0.004 * 1.3), text: '' });
     scene.add(mesh);
   }
 }
@@ -962,7 +1132,7 @@ function placeLabels() {
   screenUp.setFromMatrixColumn(camera.matrixWorld, 1);
   for (const l of labels) {
     const left = l.wall.count - game.state.gone[l.wall.face];
-    l.mesh.visible = left > 0 && isFacing(faceIdx(l.n.toArray()));
+    l.mesh.visible = left > 0 && isFacing(l.face);
     if (!l.mesh.visible) continue;
     const text = String(left);
     if (text !== l.text) {
@@ -1017,12 +1187,15 @@ function load(params) {
   }
 
   const t0 = performance.now();
-  const cube = makeCube(params.N);
+  const cube = surfaceOf(params);
   const puz = generate(cube, params);
   const ms = performance.now() - t0;
 
   game.params = params;
   game.puz = puz;
+  fitTo(cube);
+  shapeGlass(cube);
+  turnFaces();
   game.state = newState(puz);
   game.fell = [];
   game.pieces = [];
@@ -1044,7 +1217,7 @@ function load(params) {
     redUntil: 0,
     free: false,
     track: buildTrack(cube, a),
-    mesh: new THREE.Mesh(new THREE.BufferGeometry(), arrowMat),
+    mesh: arrowMesh(),
   }));
   for (const ar of game.arrows) {
     if (ar.dial >= 0) seat(ar);
@@ -1234,17 +1407,18 @@ function slash(x, { at, k }) {
 }
 
 // The line through cells of arrow x, for drawDecor to thin away: points along it, each
-// with the face the stretch up to it lies on (over a cube edge, a point on the edge as
-// well), in the arrow's colour.
+// with the face the stretch up to it lies on (where a face ends, a point on the edge
+// as well), in the arrow's colour.
 function pieceOf(x, cells) {
-  const C = game.puz.cube.cells;
+  const { cube } = game.puz;
+  const C = cube.cells;
   const pts = [];
   cells.forEach((id, i) => {
     const prev = C[cells[i - 1]];
-    if (i && faceIdx(prev.n) !== faceIdx(C[id].n)) pts.push({ p: add(prev.p, C[id].n), n: prev.n });
-    pts.push({ p: C[id].p, n: C[id].n });
+    if (i && bent(prev, C[id])) pts.push({ p: turnPoint(prev, C[id]), n: prev.n, face: cube.faceOf(prev.id) });
+    pts.push({ p: C[id].p, n: C[id].n, face: cube.faceOf(id) });
   });
-  return { pts, color: colorOf(x, faceIdx(C[cells[0]].n)), cell: cells.at(-1) };
+  return { pts, color: colorOf(x, cube.faceOf(cells[0])), cell: cells.at(-1) };
 }
 
 const raycaster = new THREE.Raycaster();
@@ -1264,29 +1438,31 @@ function hitFace(x, y) {
   raycaster.setFromCamera(ndc, camera);
   const hit = raycaster.intersectObject(box)[0];
   if (!hit) return null;
-  const { N } = game.puz.cube;
   const n = [hit.face.normal.x, hit.face.normal.y, hit.face.normal.z].map(Math.round);
-  const s = (2 * N) / S;
-  const d = [hit.point.x * s + N, hit.point.y * s + N, hit.point.z * s + N];
+  const { mid, k } = fit;
+  const d = [hit.point.x / k + mid[0], hit.point.y / k + mid[1], hit.point.z / k + mid[2]];
   const a = axisOf(n);
   const b = (a + 1) % 3;
   const c = (a + 2) % 3;
   return { n, d, a, b, c, ib: Math.floor(d[b] / 2), ic: Math.floor(d[c] / 2) };
 }
 
-const cellId = (n, a, b, c, i, j) => {
-  const N = game.puz.cube.N;
+// The cell (i, j) of the plane a face with normal n lies in, crossing axis a at `at`;
+// undefined where the surface has no such cell.
+const cellId = (n, a, b, c, i, j, at) => {
+  const { cells, index } = game.puz.cube;
   const p = [0, 0, 0];
-  p[a] = n[a] > 0 ? 2 * N : 0;
+  p[a] = at;
   p[b] = 2 * i + 1;
   p[c] = 2 * j + 1;
-  return game.puz.cube.index.get(p.join(','));
+  const id = index.get(p.join(','));
+  return id !== undefined && dot(cells[id].n, n) === 1 ? id : undefined;
 };
 
 // How many screen pixels a cell spans with the camera `dist` from the cube's centre.
 function cellPixels(dist = camera.position.length()) {
   const unit = renderer.domElement.clientHeight / 2 / (Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * dist);
-  return (S / game.puz.cube.N) * unit;
+  return cellSize() * unit;
 }
 
 // How bold to draw arrows: small cells on screen (a big cube on a phone) get bolder
@@ -1296,8 +1472,8 @@ const thickness = () => Math.min(1.45, Math.max(1, 22 / cellPixels(HOME_VIEW.len
 function pick(x, y) {
   const h = hitFace(x, y);
   if (!h) return null;
-  const { N } = game.puz.cube;
   const { n, d, a, b, c, ib, ic } = h;
+  const at = Math.round(d[a]);
   // A fingertip covers more than a small cell, so a tap reaches further then.
   const reach = Math.min(1.6, Math.max(0.9, 18 / cellPixels()));
   const R = Math.ceil(reach);
@@ -1306,8 +1482,8 @@ function pick(x, y) {
   let lit = null; // the tutorial's lit arrow, taken over a nearer one when within reach
   for (let i = ib - R; i <= ib + R; i++) {
     for (let j = ic - R; j <= ic + R; j++) {
-      if (i < 0 || j < 0 || i >= N || j >= N) continue;
-      const cell = cellId(n, a, b, c, i, j);
+      const cell = cellId(n, a, b, c, i, j, at);
+      if (cell === undefined) continue;
       const p = game.puz.cube.cells[cell].p;
       const owner = ownerAt(game.puz, game.state, cell);
       if (owner < 0 || game.arrows[owner].gates.includes(cell)) continue;
@@ -1495,11 +1671,7 @@ function frame(now) {
   turnCamera(now);
   controls.update();
 
-  const m = facingMask();
-  if (m !== facing) {
-    facing = m;
-    redrawAll();
-  }
+  if (turnFaces()) redrawAll();
   fadeScenery();
   if (game.falling) drawDecor();
   placeLabels();
@@ -2405,6 +2577,7 @@ function readPanel() {
   const v = (id) => Number($(id).value);
   const minLen = v('minLen');
   return {
+    shape: $('shape').value || null,
     N: v('N'),
     minLen,
     maxLen: Math.max(minLen, v('maxLen')),
@@ -2421,6 +2594,8 @@ function readPanel() {
 }
 
 function syncPanel(p) {
+  $('shape').value = p.shape ?? '';
+  sizeSlider();
   $('N').value = p.N;
   $('minLen').value = p.minLen;
   $('maxLen').value = p.maxLen;
@@ -2436,6 +2611,14 @@ function syncPanel(p) {
   showSliderValues();
 }
 
+// On a solid the size slider sets the grid cells along a block's edge.
+function sizeSlider() {
+  const solid = !!$('shape').value;
+  $('nLabel').textContent = solid ? '블록 한 변 칸 수' : '격자 크기 (한 면 N×N)';
+  $('N').min = solid ? 2 : 3;
+  $('N').max = solid ? 8 : 16;
+}
+
 function showSliderValues() {
   for (const id of SLIDERS) $(`o_${id}`).textContent = $(id).value + (PERCENT.includes(id) ? '%' : '');
 }
@@ -2445,6 +2628,13 @@ $('gimmick').onchange = () => {
   // Coming from a home stage, start the gimmick on a mid-sized cube rather than
   // whatever that stage happened to use.
   if (game.world !== 'free') syncPanel({ ...GIMMICK_DEFAULTS, gimmick: $('gimmick').value || null, seed: 1 });
+  loadCustom();
+};
+// A new shape starts at the size it is drawn at best (the cube at the gimmick default).
+$('shape').onchange = () => {
+  sizeSlider();
+  $('N').value = $('shape').value ? SHAPES[$('shape').value].u : GIMMICK_DEFAULTS.N;
+  showSliderValues();
   loadCustom();
 };
 $('gen').onclick = loadCustom;
@@ -2483,6 +2673,9 @@ $('worldBack').innerHTML = ICON.back;
 $('worldBack').onclick = closeWorld;
 addEventListener('keydown', (e) => e.key === 'Escape' && (closeWorld(), closeShopPage()));
 
+// The generator panel's shapes, easy to hard.
+const LEVEL = { easy: '쉬움', medium: '보통', hard: '어려움' };
+for (const [key, { name, level }] of Object.entries(SHAPES)) $('shape').append(new Option(`${name} (${LEVEL[level]})`, key));
 // The generator panel's gimmick list, from the worlds (by tier).
 for (const key of [...COUNTRIES].sort((a, b) => WORLDS[a].tier - WORLDS[b].tier)) {
   $('gimmick').append(new Option(`${WORLDS[key].name} — ${WORLDS[key].about}`, key));
@@ -2567,7 +2760,7 @@ addEventListener('resize', resize);
 resize();
 
 // Handle for poking at the game from the browser console.
-window.arrowCube = { game, wallet, pick, tap, camera, box, raycaster };
+window.arrowCube = { game, wallet, pick, tap, camera, box, raycaster, screenOf, world };
 
 loadStage('home', 1);
 requestAnimationFrame(frame);

@@ -15,7 +15,7 @@ export function newState(puz) {
     dialOcc: puz.dials ? Int32Array.from(puz.dialOcc) : null,
     // How many arrows have left from each face (the face their head was on): a Berlin
     // wall falls once its face's count reaches the wall's.
-    gone: new Int32Array(6),
+    gone: new Int32Array(puz.cube.faces),
     // How many cells each bull has charged forward.
     ran: new Int32Array(puz.arrows.length),
     // How many cells each arrow has lost off its tail end to samurais' cuts.
