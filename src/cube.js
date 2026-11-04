@@ -425,8 +425,10 @@ export function generate(
   const sundial = gimmick === 'sundial' ? makeSundial() : null;
   const canals = new Map(); // cell → flow direction
   if (gimmick === 'canal') makeCanals(Math.min(6 * perFace, 1 + Math.round(amount * 9)));
-  // Berlin walls, as many as canals.
-  const walls = gimmick === 'wall' ? makeWalls(Math.min(6 * perFace, 1 + Math.round(amount * 9))) : null;
+  // Berlin walls, as many as canals; on a solid with more faces than a cube's six, more
+  // in step, as a small face's walls often have nothing able to leave the face before
+  // them and are left out (countWalls): the cross kept two or three of ten.
+  const walls = gimmick === 'wall' ? makeWalls(Math.min(cube.faces * perFace, 1 + Math.round((amount * 9 * cube.faces) / 6))) : null;
   const wallOf = new Map(); // wall cell → its wall
   walls?.forEach((w, k) => w.cells.forEach((c) => wallOf.set(c, k)));
   // Mondrian panels, covering from about a twelfth of the cube to a third of it.
@@ -652,14 +654,23 @@ export function generate(
 
   // Berlin walls: straight runs of three cells or more (longer on bigger cubes),
   // `perFace` to a face. No body may sit on one; ways out cross them while the cube is
-  // built (countWalls sets when each one falls).
+  // built (countWalls sets when each one falls). On a solid, only on its broad faces,
+  // three blocks' worth of cells or more (or its broadest if none is): a wall on a
+  // small face stood in every way out there and was left out, and the few ways out
+  // crossing the rest kept the gimmick thin in a country's late stages.
   function makeWalls(n) {
     const out = [];
     const used = new Map(); // face → walls on it
+    const cellsOn = new Int32Array(cube.faces);
+    for (let c = 0; c < cube.count; c++) cellsOn[cube.faceOf(c)]++;
+    const broad = cube.voxels.length > 1 ? Math.min(3 * cube.u * cube.u, Math.max(...cellsOn)) : 0;
     for (let k = 0; k < n * 40 && out.length < n; k++) {
       const first = Math.floor(rnd() * cube.count);
       const face = cube.faceOf(first);
-      if ((used.get(face) ?? 0) >= perFace) continue;
+      // A broad face takes a wall for every three blocks' worth of its cells (at least
+      // `perFace`).
+      const room = broad ? Math.max(perFace, Math.floor(cellsOn[face] / broad)) : perFace;
+      if ((used.get(face) ?? 0) >= room || cellsOn[face] < broad) continue;
       const t = pick(cube.tangents(first));
       const want = 3 + Math.floor(rnd() * (1 + cube.N / 4));
       const cells = [first];
@@ -692,7 +703,7 @@ export function generate(
     for (const w of walls) w.count = Infinity;
     const kept = [];
     for (const w of order) {
-      const left = new Int32Array(6);
+      const left = new Int32Array(cube.faces);
       for (const l of solve(puz).layers) for (const i of l.arrows) left[cube.faceOf(arrows[i].cells.at(-1))]++;
       if (!left[w.face]) continue;
       w.count = left[w.face];

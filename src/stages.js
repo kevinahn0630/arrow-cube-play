@@ -9,7 +9,9 @@
 //  deep: how long the chains of arrows waiting on one another get, across faces
 //  long: how strongly long arrows are preferred (fewer short ones)
 //  gimmick / amount: which gimmick and how much of it (see cube.js)
-import { SHAPES } from './shapes.js';
+import { SHAPES, blocksOf, mostCells } from './shapes.js';
+import { LANDMARKS, LANDMARKS_OF } from './landmarks.js';
+import { GIMMICKS, makeSolid } from './cube.js';
 
 // Stages 1–8 of a world are cubes and the rest solids (the user, 2026-11-04). A solid
 // that is harder to take in by eye plays harder than its puzzle measures, so the
@@ -65,11 +67,23 @@ const playsLike = (s) => {
 };
 // Hearts (wrong taps a stage forgives) from stage 6 on: 3, rising to 5 by stage 40.
 const heartsAt = (s) => (s < 6 ? 0 : 3 + Math.round((2 * (s - 6)) / (GIMMICK_STAGES - 6)));
+// Stages 9–40 of a country are solids (the user, 2026-11-04): a sculpture of its own
+// for every stage (shapes.js sculpt, growing from 16 blocks to 39), but for 35 and 40,
+// after the country's second star, which are its two landmarks (landmarks.js) and its
+// hardest stages: the gimmick at its fullest and a target 30% over the curve. The user
+// also asked for harder gimmicks, more of them and bigger shapes than the cubes had: a
+// solid grows to about as many cells as the cube it takes the place of (preset), and
+// the gimmick's amount starts higher. Where a solid cannot reach its target even at
+// its biggest, baking takes the hardest it can.
+const CUBES = 8;
+const LANDMARK_AT = { 40: 0, 35: 1 }; // stage → which of the country's two landmarks
+const LANDMARK_RAISE = 1.3;
 function gimmickStages(gimmick, start, top, k) {
   return Array.from({ length: GIMMICK_STAGES }, (_, i) => {
     const t = (playsLike(i + 1) - 1) / (GIMMICK_STAGES - 1);
     const u = Math.min(1, t);
-    return {
+    const curve = start + (top - start) * t ** k;
+    const stage = {
       N: Math.round(6 + 9 * u),
       len: [Math.round(3 + 2 * u), Math.round(6 + 9 * u)],
       straight: 0.6 - 0.1 * u,
@@ -79,9 +93,17 @@ function gimmickStages(gimmick, start, top, k) {
       long: u,
       gimmick,
       amount: 0.1 + (0.9 * i) / (GIMMICK_STAGES - 1),
-      target: Math.round((start + (top - start) * t ** k) * 10) / 10,
+      target: Math.round(curve * 10) / 10,
       hearts: heartsAt(i + 1),
     };
+    if (i < CUBES) return stage;
+    const s = i + 1;
+    const { N, ...rest } = stage;
+    const solid = { ...rest, cubeN: N, amount: 0.4 + (0.6 * i) / (GIMMICK_STAGES - 1) };
+    if (s in LANDMARK_AT) {
+      return { ...solid, shape: LANDMARKS_OF[gimmick][LANDMARK_AT[s]], amount: 1, target: Math.round(curve * LANDMARK_RAISE * 10) / 10 };
+    }
+    return { ...solid, shape: 'sculpt', form: 1000 * (GIMMICKS.indexOf(gimmick) + 1) + s, blocks: Math.round(16 + (24 * (s - 9)) / 31) };
   });
 }
 
@@ -180,8 +202,29 @@ export const WORLDS = {
   },
 };
 
+// A country's solid (`cubeN` set) grows to about as many cells as the cubeN×cubeN cube
+// that would have been there (rounded), its grid no finer than a cell as big as on a
+// 20×20 cube: the user found bigger shapes fine, and at the 15×15 cube's cells a solid
+// holds a third to four fifths of that cube's cells, too few for the late stages.
+const FINEST = 20;
+function sizeFor(blocks, cubeN, most) {
+  const faces = makeSolid(blocks, 1).count;
+  return Math.min(most, Math.max(2, Math.round(cubeN * Math.sqrt(6 / faces))));
+}
 export function preset(world, stage) {
   const w = WORLDS[world];
-  const { len, ...rest } = w.stages[stage - 1];
-  return { ...rest, minLen: len[0], maxLen: len[1], fill: 0.95, seed: w.seedBase + stage * 7919 };
+  const { len, cubeN, ...rest } = w.stages[stage - 1];
+  const p = { ...rest, minLen: len[0], maxLen: len[1], fill: 0.95, seed: w.seedBase + stage * 7919 };
+  if (cubeN) {
+    // A landmark, the hardest stage of its country, is as big as it goes. A solid plays
+    // harder or easier than its cells say by how much it twists, so baking also tries a
+    // block edge a cell shorter or longer (a landmark one or two shorter), whichever lands
+    // nearest the target, and bakes the size it picks with the seed (stage-seeds.js N).
+    const blocks = blocksOf(p);
+    const most = mostCells(blocks, FINEST);
+    p.N = LANDMARKS[p.shape] ? most : sizeFor(blocks, cubeN, most);
+    p.sizes = (LANDMARKS[p.shape] ? [-2, -1, 0] : [-1, 0, 1]).map((d) => p.N + d).filter((n) => n >= 2 && n <= most);
+  }
+  return p;
 }
+

@@ -230,8 +230,11 @@ export function gimmickShare(puz) {
 // worlds: hard to read rather than easy to get stuck in), then the one whose arrows
 // wait on one another in the longest chain (most solve rounds); if none lands near,
 // the closest. Puzzles where the gimmick did not take are skipped.
+// A stage whose solid may be drawn at several sizes (`sizes`, stages.js preset) tries
+// them in turn and also returns the size it picks as N.
 export function pickSeed(params, target, candidates = 12) {
-  const cube = surfaceOf(params);
+  const sizes = params.sizes ?? [params.N];
+  const surfaces = new Map(sizes.map((N) => [N, surfaceOf({ ...params, N })]));
   const better = (a, b) =>
     a.near !== b.near
       ? a.near
@@ -243,12 +246,13 @@ export function pickSeed(params, target, candidates = 12) {
   let best = null;
   for (let k = 0; k < candidates; k++) {
     const seed = params.seed + k;
-    const puz = generate(cube, { ...params, seed });
+    const N = sizes[k % sizes.length];
+    const puz = generate(surfaces.get(N), { ...params, N, seed });
     if (lacksGimmick(puz)) continue;
     const { wrong, depth, stuck } = evaluate(puz, { seed });
     const off = Math.abs(wrong - target);
-    const c = { off, near: off <= Math.max(1, 0.05 * target), stuck, depth, seed, wrong };
+    const c = { off, near: off <= Math.max(1, 0.05 * target), stuck, depth, seed, wrong, N };
     if (!best || better(c, best)) best = c;
   }
-  return { seed: best.seed, wrong: best.wrong };
+  return { seed: best.seed, wrong: best.wrong, ...(params.sizes ? { N: best.N } : {}) };
 }

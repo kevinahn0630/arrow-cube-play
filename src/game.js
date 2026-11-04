@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 import { generate, add, scale, dot, cross, axisOf } from './cube.js';
-import { SHAPES, surfaceOf } from './shapes.js';
+import { SHAPES, surfaceOf, fitSolid, START_VIEW } from './shapes.js';
+import { LANDMARKS } from './landmarks.js';
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, cutBy, darkCell, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
@@ -47,7 +48,7 @@ $('stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-const HOME_VIEW = new THREE.Vector3(6.2, 4.6, 7.4);
+const HOME_VIEW = new THREE.Vector3(...START_VIEW);
 camera.position.copy(HOME_VIEW);
 
 const controls = new TrackballControls(camera, renderer.domElement);
@@ -94,69 +95,13 @@ const edgesBehind = new THREE.LineSegments(
 edgesBehind.renderOrder = -1;
 let hiding = false; // the puzzle's surface has faces that can hide others
 
-// How the surface sits in the scene: centred on the smallest ball round it, and on a
-// solid a little narrower than the cube looks from the starting view (its outline is
-// less even) and at most a quarter taller (a phone screen has the room), yet never
-// past the ball the cube turns in, whichever way it is turned. A shape whose box has
-// empty corners (the cross) turns in a smaller ball than its box's and so shows bigger.
-// `mid` is its centre in doubled grid coordinates and `k` world units per doubled grid
-// unit, so a cell is 2k across (S/N on the cube).
+// How the surface sits in the scene (shapes.js fitSolid, scaled to the cube's S): `mid`
+// is its centre in doubled grid coordinates and `k` world units per doubled grid unit,
+// so a cell is 2k across (S/N on the cube).
 let fit = { mid: [0, 0, 0], k: 1 };
-const SCREEN_X = new THREE.Vector3(0, 1, 0).cross(HOME_VIEW).normalize();
-const SCREEN_Y = HOME_VIEW.clone().cross(SCREEN_X).normalize();
-// How far the corners of blocks (doubled grid coordinates, about their centre) reach
-// across and up the screen from the starting view.
-function spread(corners) {
-  const v = new THREE.Vector3();
-  let wide = 0;
-  let tall = 0;
-  for (const c of corners) {
-    v.set(...c);
-    wide = Math.max(wide, Math.abs(v.dot(SCREEN_X)));
-    tall = Math.max(tall, Math.abs(v.dot(SCREEN_Y)));
-  }
-  return { wide, tall };
-}
-const CUBE_SPREAD = spread([[-1, -1, -1], [-1, -1, 1], [-1, 1, -1], [-1, 1, 1], [1, -1, -1], [1, -1, 1], [1, 1, -1], [1, 1, 1]]);
-// The centre of the smallest ball round some points: step towards the farthest point by
-// less and less (Bădoiu–Clarkson: after n steps within radius/√n of it), then snap to
-// an eighth of a block (u/4 doubled units), so a symmetric shape gets its exact middle.
-function ballCentre(points, u) {
-  let c = points[0];
-  for (let i = 1; i <= 10000; i++) {
-    let far = c;
-    let most = -1;
-    for (const p of points) {
-      const d = (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2;
-      if (d > most) {
-        most = d;
-        far = p;
-      }
-    }
-    c = c.map((x, a) => x + (far[a] - x) / (i + 1));
-  }
-  return c.map((x) => (Math.round((4 * x) / u) * u) / 4);
-}
 function fitTo(cube) {
-  const { voxels, u } = cube;
-  if (voxels.length === 1) {
-    const mid = cube.size.map((n) => n * u);
-    fit = { mid, k: (S * Math.sqrt(3)) / 2 / Math.hypot(...mid) };
-    return;
-  }
-  const corners = new Map();
-  for (const v of voxels) {
-    for (const x of [0, 1]) for (const y of [0, 1]) for (const z of [0, 1]) {
-      const p = [x, y, z].map((e, a) => 2 * u * (v[a] + e));
-      corners.set(p.join(), p);
-    }
-  }
-  const mid = ballCentre([...corners.values()], u);
-  const away = [...corners.values()].map((p) => p.map((x, a) => x - mid[a]));
-  const ball = (S * Math.sqrt(3)) / 2 / Math.max(...away.map((p) => Math.hypot(...p)));
-  const { wide, tall } = spread(away);
-  const side = S / 2; // the cube's corners are this far from its centre along each axis
-  fit = { mid, k: Math.min(ball, (0.92 * side * CUBE_SPREAD.wide) / wide, (1.25 * side * CUBE_SPREAD.tall) / tall) };
+  const { mid, k } = fitSolid(cube);
+  fit = { mid, k: k * S };
 }
 const cellSize = () => 2 * fit.k;
 
@@ -552,12 +497,12 @@ function drawArrow(ar, lit = null) {
 
   // Nothing but lanterns shows where it lies in the dark. Whether point p (doubled
   // coordinates) on track segment sg is in the dark:
-  const N = game.puz.cube.N;
+  const { size, u } = game.puz.cube;
   const hide = !!game.puz.darkOf && !ar.lantern;
   const inShadow = (p, sg) => {
     if (!hide || sg.face < 0) return false;
     const a = axisOf(sg.n);
-    const q = p.map((v, k) => (k === a ? game.puz.cube.planes[sg.face].at : Math.min(2 * N - 1, Math.max(1, 2 * Math.floor(v / 2) + 1))));
+    const q = p.map((v, k) => (k === a ? game.puz.cube.planes[sg.face].at : Math.min(2 * u * size[k] - 1, Math.max(1, 2 * Math.floor(v / 2) + 1))));
     return darkCell(game.puz, game.state, game.puz.cube.index.get(q.join(',')));
   };
   const tr = ar.track;
@@ -1261,7 +1206,8 @@ function loadStage(world, stage) {
   if (game.stage === 1 && !tutorialDone(world)) game.stage = 0;
   if (!game.stage) return loadTutorial(world);
   // Stage puzzles are fixed; tools/bake-stages.mjs picks their seeds offline.
-  load({ ...preset(world, game.stage), seed: STAGE_SEEDS[world][game.stage - 1].seed });
+  const baked = STAGE_SEEDS[world][game.stage - 1];
+  load({ ...preset(world, game.stage), seed: baked.seed, ...(baked.N ? { N: baked.N } : {}) });
 }
 
 // Starts the stage on now over; a tutorial from its first step.
@@ -2578,6 +2524,8 @@ function readPanel() {
   const minLen = v('minLen');
   return {
     shape: $('shape').value || null,
+    // A sculpture keeps the stage's own form, else grows from the seed.
+    ...($('shape').value === 'sculpt' ? { form: game.params?.form ?? (v('seed') || 1), blocks: game.params?.blocks ?? 24 } : {}),
     N: v('N'),
     minLen,
     maxLen: Math.max(minLen, v('maxLen')),
@@ -2616,7 +2564,7 @@ function sizeSlider() {
   const solid = !!$('shape').value;
   $('nLabel').textContent = solid ? '블록 한 변 칸 수' : '격자 크기 (한 면 N×N)';
   $('N').min = solid ? 2 : 3;
-  $('N').max = solid ? 8 : 16;
+  $('N').max = solid ? 10 : 16;
 }
 
 function showSliderValues() {
@@ -2633,7 +2581,7 @@ $('gimmick').onchange = () => {
 // A new shape starts at the size it is drawn at best (the cube at the gimmick default).
 $('shape').onchange = () => {
   sizeSlider();
-  $('N').value = $('shape').value ? SHAPES[$('shape').value].u : GIMMICK_DEFAULTS.N;
+  $('N').value = $('shape').value ? (SHAPES[$('shape').value]?.u ?? 3) : GIMMICK_DEFAULTS.N;
   showSliderValues();
   loadCustom();
 };
@@ -2676,6 +2624,8 @@ addEventListener('keydown', (e) => e.key === 'Escape' && (closeWorld(), closeSho
 // The generator panel's shapes, easy to hard.
 const LEVEL = { easy: '쉬움', medium: '보통', hard: '어려움' };
 for (const [key, { name, level }] of Object.entries(SHAPES)) $('shape').append(new Option(`${name} (${LEVEL[level]})`, key));
+$('shape').append(new Option('자동 조형 (나라 스테이지)', 'sculpt'));
+for (const [key, { name, country }] of Object.entries(LANDMARKS)) $('shape').append(new Option(`${name} (${WORLDS[country].name.split(' · ')[0]} 랜드마크)`, key));
 // The generator panel's gimmick list, from the worlds (by tier).
 for (const key of [...COUNTRIES].sort((a, b) => WORLDS[a].tier - WORLDS[b].tier)) {
   $('gimmick').append(new Option(`${WORLDS[key].name} — ${WORLDS[key].about}`, key));
