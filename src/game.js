@@ -1693,16 +1693,20 @@ function hud() {
 }
 
 // The card over the stage or the home screen, holding top to bottom what `parts` names:
-// a close button, an icon (an ICON key), the title and a line under it, a `body` (an
-// element), coins `won` (+n), what the stage scored up the `climb`, a coin price to `pay`
-// (or nothing if the wallet is short), the coins the player `has`, `buyCoins` (opens the
-// shop), a `tip`, an `ad` for a reward (in the bottom row if `primary`) and the bottom
-// row: a round `restart` button and the `next` step (greyed if `next.off`). Words are kept
-// few (2026-11-03 user request).
+// a close button, an icon (an ICON key), the title (after a world's `flag`) and a line
+// under it, a world's progress (`track`), a `body` (an element), coins `won` (+n, marked
+// ×2 once an ad `doubled` them), what the stage scored up the `climb`, a coin price to
+// `pay` (or nothing if the wallet is short), the coins the player `has`, `buyCoins` (opens
+// the shop), a `tip`, the stage the `hearts` start at, an `ad` for a reward (in the bottom
+// row if `primary`) and the bottom row: a round `restart` button and the `next` step
+// (greyed if `next.off`; `label`s name buttons that only show pictures). Words are kept
+// few (2026-11-03 user request), on a clear fewer still: pictures stand for them where
+// they can (2026-11-04, the user's pick of dist/samples/clear.html 안 B).
 // A clear (`celebrate`) puts the title on a ribbon with sun rays turning behind the card
-// and confetti bursting from it, and the coins count up from `wonFrom` (fx.js). A card
-// that comes up pops in with its parts rising one after another.
-function showCard({ close, icon, title, celebrate, note, body, won, wonFrom = 0, climb, pay, has, buyCoins, tip, ad, restart, next }) {
+// and confetti bursting from it, the coins count up from `wonFrom` (fx.js), and its
+// buttons are toys side by side: the ad's ×2 and the next stage. A card that comes up
+// pops in with its parts rising one after another.
+function showCard({ close, icon, title, flag, celebrate, note, track, body, won, wonFrom = 0, doubled, climb, pay, has, buyCoins, tip, hearts, ad, restart, next }) {
   const card = $('card');
   const fresh = $('clear').hidden || $('clear').classList.contains('closing');
   clearTimeout(closing);
@@ -1714,24 +1718,35 @@ function showCard({ close, icon, title, celebrate, note, body, won, wonFrom = 0,
     return b;
   };
   card.replaceChildren();
+  card.classList.toggle('cheer', !!celebrate);
   if (close) card.append(button('close-x', ICON.close, closeCard));
   if (icon) {
     const ic = node('div', `badge-ic ${icon}`);
     ic.innerHTML = ICON[icon];
     card.append(ic);
   }
-  card.append(node('h2', celebrate ? 'ribbon' : '', title));
+  const h = node('h2', celebrate ? 'ribbon' : '', title);
+  if (flag) {
+    const f = node('span', 'flag');
+    f.innerHTML = worldIcon(flag);
+    f.setAttribute('role', 'img');
+    f.setAttribute('aria-label', shortName(flag));
+    h.classList.add('flagged');
+    h.prepend(f);
+  }
+  card.append(h);
   if (note) card.append(node('p', 'clear-stars', note));
+  if (track) card.append(trackOf(track, fresh));
   if (body) card.append(body);
   if (won !== undefined) {
     const r = node('div', 'reward');
-    r.innerHTML = `${ICON.coin}<span>+${wonFrom}</span>`;
+    r.innerHTML = `${ICON.coin}<span>+${wonFrom}</span>${doubled ? '<em class="x2">×2</em>' : ''}`;
     card.append(r);
     setTimeout(() => countUp(r.querySelector('span'), wonFrom, won, 700, (n) => `+${n}`), fresh ? 380 : 0);
   }
   if (climb) {
     const c = node('p', 'climb-won');
-    c.innerHTML = `${ICON.flag}+${climb.points}${climb.row > 1 ? `<small>${ICON.flame}${climb.row}연속</small>` : ''}`;
+    c.innerHTML = `${ICON.flag}+${climb.points}${climb.row > 1 ? `<small>${ICON.flame}${climb.row}</small>` : ''}`;
     for (const [kind, n] of climb.got) c.insertAdjacentHTML('beforeend', `<span class="got">${rewardIcon(kind)}${kind === 'coins' ? `+${n}` : `×${n}`}</span>`);
     card.append(c);
   }
@@ -1747,37 +1762,74 @@ function showCard({ close, icon, title, celebrate, note, body, won, wonFrom = 0,
     t.innerHTML = `${ICON.info}<span>${tip}</span>`;
     card.append(t);
   }
+  if (hearts) {
+    const p = node('p', 'hearts-from');
+    p.innerHTML = `${ICON.heart}<span>${hearts}스테이지부터</span>`;
+    card.append(p);
+  }
   // An ad's reward comes once it has been watched; a button pressed once does not take another.
-  const adButton = (cls) => {
-    const b = button(cls, `${ICON.ad}<span>${ad.text}</span>`, async () => {
+  const adButton = (cls, icon = ICON.ad) => {
+    const b = button(cls, `${icon}<span>${ad.text}</span>`, async () => {
       b.disabled = true;
       const how = await rewarded();
       if (how === 'earned') return ad.then();
       b.disabled = false;
       if (how === 'failed') say('광고를 불러오지 못했어요');
     });
+    if (ad.label) b.setAttribute('aria-label', ad.label);
     return b;
   };
-  if (ad && !ad.primary) card.append(adButton('ad'));
-  if (restart || next || ad?.primary) {
-    const row = node('div', 'row-btns');
-    if (restart) {
-      const b = button('restart', ICON.restart, restart);
-      b.setAttribute('aria-label', '재시작');
-      row.append(b);
-    }
-    if (ad?.primary) row.append(adButton('primary ad'));
-    if (next) {
-      const b = button('primary wide', next.text, next.then);
-      b.disabled = !!next.off;
-      row.append(b);
-    }
+  const nextButton = (cls) => {
+    const b = button(cls, next.text, next.then);
+    b.disabled = !!next.off;
+    if (next.label) b.setAttribute('aria-label', next.label);
+    return b;
+  };
+  if (celebrate) {
+    const row = node('div', 'toy-btns');
+    if (ad) row.append(adButton('tv', ICON.tv));
+    if (next) row.append(nextButton('primary next'));
     card.append(row);
+  } else {
+    if (ad && !ad.primary) card.append(adButton('ad'));
+    if (restart || next || ad?.primary) {
+      const row = node('div', 'row-btns');
+      if (restart) {
+        const b = button('restart', ICON.restart, restart);
+        b.setAttribute('aria-label', '재시작');
+        row.append(b);
+      }
+      if (ad?.primary) row.append(adButton('primary ad'));
+      if (next) row.append(nextButton('primary wide'));
+      card.append(row);
+    }
   }
   if (fresh) [...card.children].forEach((el, i) => el.classList.contains('close-x') || (el.classList.add('rise'), el.style.setProperty('--i', i)));
   $('rays').hidden = !celebrate;
   $('clear').hidden = false;
   if (celebrate && fresh) setTimeout(() => confetti(card.querySelector('h2')), 160);
+}
+// A world's progress on its clear card, drawn as on the world's page: a bar filled to the
+// stages cleared of `total`, with a star where each is earned (STAR_AT, when the world
+// has `stars`), gold once it is. On a card just come up the bar grows from what `was`
+// cleared before, and a star this clear earned pops in with sparkles.
+function trackOf({ cleared, was = cleared, total, stars }, fresh) {
+  const grow = fresh && !calm && was !== cleared;
+  const at = (n) => `${(100 * n) / total}%`;
+  const t = node('div', 'track');
+  const fill = node('i');
+  fill.style.width = at(grow ? was : cleared);
+  t.append(fill);
+  for (const s of stars ? STAR_AT : []) {
+    const earned = fresh && was < s && s <= cleared;
+    const m = node('span', `star${earned ? ' star-new' : ''}`);
+    m.style.left = at(s);
+    m.innerHTML = s <= cleared ? ICON.starOn : ICON.starOff;
+    t.append(m);
+    if (earned) setTimeout(() => sparkle(m, 10), 1250);
+  }
+  if (grow) setTimeout(() => (fill.style.width = at(cleared)), 450);
+  return t;
 }
 // The card shrinks away, unless another comes up first.
 let closing = 0;
@@ -1821,44 +1873,46 @@ const showNoHearts = () =>
 
 // The clear card. A world stage cleared by hand is recorded and pays its coins
 // (economy.js coinsFor; a fifth if it was cleared before), which an ad doubles once; the
-// card says where the world stands, and when a star was just earned. That a stage
-// cleared again pays a fifth is told once: on 집 안's first stage, or the first time it
-// happens.
+// card's bar shows where the world stands, with a star just earned popping in (the coins
+// the player has are not on it: the bar under the cube shows them, and the coins fly
+// there). The last stage's ribbon carries the world's flag. That a stage cleared again
+// pays a fifth is told once: on 집 안's first stage, or the first time it happens.
 function showClear() {
   if (game.tut) return showTutorialDone();
   const inWorld = game.world !== 'free';
   const w = WORLDS[game.world];
   const last = inWorld && game.stage === w.stages.length;
+  const to = !inWorld ? 0 : last ? 1 : game.stage + 1;
   const parts = {
-    title: last ? `${shortName(game.world)} 완료!` : '스테이지 클리어!',
+    title: last ? '완료!' : '클리어!',
+    flag: last ? game.world : null,
     celebrate: true,
-    next: { text: !inWorld ? '새 퍼즐' : last ? '처음부터' : '다음 스테이지', then: nextStage },
+    next: { text: goTo(to), label: to ? `${to}스테이지` : '새 퍼즐', then: nextStage },
   };
   const coins = wallet.coins;
   if (inWorld && game.autoSolved) {
-    parts.note = '자동 풀이로 깬 스테이지는 기록하지 않아요';
+    parts.note = '자동 풀이 · 기록 안 함';
   } else if (inWorld) {
     const again = isCleared(progress, game.world, game.stage);
-    const before = starsOf(progress, game.world);
+    const was = clearedCount(progress, game.world);
     markCleared(progress, game.world, game.stage);
-    const stars = starsOf(progress, game.world);
-    parts.note = `${w.tier ? `${starText(stars)} · ` : ''}${clearedCount(progress, game.world)} / ${w.stages.length} 클리어`;
-    if (stars > before) parts.note += ' · 별을 얻었어요!';
+    parts.track = { cleared: clearedCount(progress, game.world), was, total: w.stages.length, stars: w.tier > 0 };
     const won = coinsFor(game.world, game.stage, again);
     if (!wallet.told && (again || (game.world === 'home' && game.stage === 1))) {
       wallet.told = true;
-      parts.tip = '다시 깬 스테이지는 코인 1/5';
+      parts.tip = '다시 깨면 코인 1/5';
     }
     earn(won);
     if (game.counts) parts.climb = climbUp(again);
-    Object.assign(parts, { won, has: wallet.coins });
+    parts.won = won;
     parts.ad = {
-      text: '광고 보면 두 배!',
+      text: '×2',
+      label: '광고 보고 코인 두 배',
       then: () => {
         game.adWatched = true;
         const before = wallet.coins;
         earn(won);
-        showCard({ ...parts, won: 2 * won, wonFrom: won, has: wallet.coins, ad: null });
+        showCard({ ...parts, won: 2 * won, wonFrom: won, doubled: true, ad: null });
         payOut(before, $('card').querySelector('.reward'));
       },
     };
@@ -1912,17 +1966,19 @@ function climbUp(again) {
 }
 
 // A tutorial played through: noted on the device, so stage 1 opens from now on. A
-// country's card says that hearts start at stage 6.
+// country's card shows the stage its hearts start at (6).
 function showTutorialDone() {
   if (!game.autoSolved) markTutorialDone(game.world);
   $('guide').hidden = true;
   showCard({
     title: '튜토리얼 완료!',
     celebrate: true,
-    note: WORLDS[game.world].tier ? '6스테이지부터는 하트가 있어요. 막힌 화살표를 누를 때마다 하나씩 줄어요.' : '',
-    next: { text: '1스테이지 시작', then: nextStage },
+    hearts: WORLDS[game.world].stages.findIndex((s) => s.hearts) + 1,
+    next: { text: goTo(1), label: '1스테이지', then: nextStage },
   });
 }
+// A clear card's next step: the stage's number (none for a new puzzle) and a play mark.
+const goTo = (stage) => `${stage ? `<span>${stage}</span>` : ''}${ICON.go}`;
 
 // The card's next step: the next stage (from the last, the first again), or a new
 // puzzle in the generator. In the app, every AD_EVERY country stages a full-screen ad

@@ -1,8 +1,8 @@
 // Small icons (SVG strings). The items, what the shop sells, the home screen's tabs, the
-// sound button and the stage's home button are drawn like toys, soft and rounded with a
-// lighter and a darker side and no outline (2026-11-03 user picks, dist/samples/icons.html
-// 안 1 and tabs2.html); the rest are line icons: round caps, strokes in currentColor. The
-// coin is gold with the game's up arrow.
+// sound button, the stage's home button and the clear card's ad are drawn like toys, soft
+// and rounded with a lighter and a darker side and no outline (2026-11-03 user picks,
+// dist/samples/icons.html 안 1 and tabs2.html; 2026-11-04 clear.html 안 B); the rest are
+// line icons: round caps, strokes in currentColor. The coin is gold with the game's up arrow.
 const COIN = '<circle cx="10" cy="10" r="9.3" fill="#efb245"/><circle cx="10" cy="10" r="7" fill="#f8cb63" stroke="#fde4a3" stroke-width="1.2"/><path d="M10 13.7V6.8M7.3 9.4 10 6.7l2.7 2.7" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>';
 // A coin with a white rim, so coins lying on each other stay apart.
 const coinAt = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})"><circle cx="10" cy="10" r="10" fill="#fff"/>${COIN}</g>`;
@@ -45,6 +45,10 @@ export const ICON = {
     <path d="M13.4 30 18.4 16.8 23.4 30M15.4 25.4h6" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M27.2 16.8V30h2.4c4.2 0 6.6-2.4 6.6-6.6s-2.4-6.6-6.6-6.6Z" fill="none" stroke="#fff" stroke-width="3.2" stroke-linejoin="round"/>
     <path d="M8 42 41 7" stroke="#fff" stroke-width="8.4" stroke-linecap="round"/><path d="M8 42 41 7" stroke="#5a4862" stroke-width="3.6" stroke-linecap="round"/>`),
+  // The clear card's ad, for coins ×2: the same sign as a screen with a play mark.
+  tv: toy(`<rect x="5" y="11.5" width="38" height="27" rx="8" fill="#e46f5e"/><rect x="5" y="9" width="38" height="27" rx="8" fill="#f68c7c"/>
+    <path d="M12.5 14.6h9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0.4"/>
+    <path d="M20.6 16.4v12.2l10.4-6.1Z" fill="#fff" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/>`),
   gift: toy(`<ellipse cx="24" cy="43.2" rx="15" ry="2.8" fill="#4a3f5c" opacity="0.12"/>
     <rect x="9" y="22" width="30" height="20" rx="3.5" fill="#f28d7f"/><path d="M31 22h4.5a3.5 3.5 0 0 1 3.5 3.5v13a3.5 3.5 0 0 1-3.5 3.5H31Z" fill="#e37465"/>
     <rect x="21" y="22" width="6" height="20" fill="#ffd45a"/><rect x="6.5" y="15" width="35" height="9.5" rx="3.5" fill="#f8a698"/><rect x="21" y="15" width="6" height="9.5" fill="#ffe28e"/>
@@ -91,6 +95,8 @@ export const ICON = {
   starOff: star(false),
   pin: '<svg viewBox="0 0 40 48" aria-hidden="true"><path d="M20 46c-1.6-6-15-14-15-26a15 15 0 0 1 30 0c0 12-13.4 20-15 26Z" fill="currentColor" stroke="#fff" stroke-width="2.4"/><circle cx="20" cy="19.5" r="7" fill="#fff"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L18.6 12Z" fill="currentColor"/></svg>',
+  // On to a stage (the clear card's next step, after its number): a play mark with soft corners.
+  go: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 6.4v11.2L17.6 12Z" fill="currentColor" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></svg>',
   // The shop page's way back, and the climb's marks.
   flag: line('M6 21V3.8M6 4.6c3.1-1.7 5.6 1.5 8.7 0 1.2-.6 2.2-.7 3.3-.4v8.6c-1.1-.3-2.1-.2-3.3.4-3.1 1.5-5.6-1.7-8.7 0'),
   back: line('M14.8 5.4 8.2 12l6.6 6.6'),
