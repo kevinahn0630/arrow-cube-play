@@ -331,6 +331,84 @@
   .page-head .back svg { width: 26px; height: 26px; }
   .page .pill { background: #ffffffa8; border-color: #ffffffe6; box-shadow: 0 6px 16px #b48aa024; color: #5a4862; }
   .page-body { flex: 1; overflow: auto; padding: 6px 16px max(24px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+  /* The 모음 tab (2026-11-05, the user's pick of dist/samples/souvenir.html 안 B): a passport
+     with a stamp for each country played through (a crown on it once all perfect),
+     오늘의 큐브's month cups, and a cabinet of the landmarks' miniatures, those still to
+     win in grey. Its tab has a dot while a new souvenir waits to be seen. */
+  .tab { position: relative; }
+  .tab .dot { position: absolute; top: 2px; right: calc(50% - 26px); width: 12px; height: 12px; border-radius: 50%; background: #ef5a4c; border: 2.5px solid #fff; display: none; }
+  .tab.new:not(.on) .dot { display: block; }
+  .collect-tab { padding-top: 6px; padding-bottom: 110px; }
+  .collect-tab[hidden] { display: none; }
+  .cl-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 2px 10px; }
+  .cl-head b { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+  .cl-head small { padding: 6px 12px; border-radius: 999px; background: #fff; color: #c98a12; font-size: 13px; font-weight: 800; box-shadow: 0 4px 12px #b48aa022; }
+  .cl-pass { margin: 0 0 14px; padding: 12px 12px 14px; border-radius: 20px; background: linear-gradient(180deg, #5b6ea8, #4a5c93); box-shadow: 0 6px 0 #3e4e80, 0 12px 22px #4a5c9340; color: #fff; }
+  .cl-pass h3 { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 8px; font-size: 14px; letter-spacing: 2px; }
+  .cl-pass h3 b { font-size: 13px; color: #ffe08a; letter-spacing: 0; }
+  .cl-stamps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 10px; border-radius: 14px; background: #fff8ef; }
+  .cl-stamps button { position: relative; aspect-ratio: 1; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 2px dashed #e1d3cb; background: none; }
+  .cl-stamps .flag { width: 60%; border-radius: 2px; opacity: 0.22; filter: grayscale(1); }
+  .cl-stamps .on { border: 3px solid var(--c); transform: rotate(-12deg); }
+  .cl-stamps .on .flag { opacity: 1; filter: none; }
+  .cl-stamps .crown { position: absolute; top: -10px; right: -8px; width: 22px; height: 22px; }
+  .cl-cups { display: flex; gap: 12px; overflow-x: auto; margin: 0 0 14px; padding: 10px 14px; border-radius: 20px; background: #ffffffb8; }
+  .cl-cups figure { margin: 0; display: grid; justify-items: center; gap: 2px; font-size: 11px; font-weight: 800; color: #7c6a8c; }
+  .cl-cups svg { width: 46px; height: 46px; }
+  .cl-cab { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 6px; padding: 12px 8px 14px; border-radius: 20px; background: #ffffffb8; }
+  .cl-cab button { padding: 0; border: 0; background: none; display: grid; justify-items: center; gap: 2px; font-size: 11px; font-weight: 700; color: #7c6a8c; }
+  .cl-cab .mini { position: relative; z-index: 1; display: block; height: 72px; width: auto; max-width: 100%; margin-bottom: -10px; filter: drop-shadow(0 3px 2px #4a3f5c22); }
+  .cl-cab button::after { content: ''; order: 1; width: 76px; height: 14px; border-radius: 50%; background: linear-gradient(180deg, #f6dccb, #e9c3ad); box-shadow: 0 3px 0 #d7a98e; }
+  .cl-cab span { order: 2; margin-top: 4px; white-space: nowrap; }
+  .cl-cab .no span { color: #c0b4c3; }
+  .card .sv-big { display: grid; justify-items: center; gap: 8px; margin: 0 0 6px; }
+  .card .sv-big .mini { display: block; height: 130px; width: auto; max-width: 100%; filter: drop-shadow(0 4px 3px #4a3f5c2a); }
+  .card .sv-big small { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #7c6a8c; }
+  .card .sv-big .flag { width: 24px; }
+  .card .sv-new { display: grid; justify-items: center; margin: -4px 0 6px; }
+  .card .sv-new .mini { display: block; height: 96px; width: auto; max-width: 100%; filter: drop-shadow(0 4px 3px #4a3f5c2a); animation: sv-pop 0.6s 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .card .sv-new b { margin-top: 2px; font-size: 15px; color: #5a4862; }
+  @keyframes sv-pop { from { transform: scale(0.2) translateY(30px); opacity: 0; } }
+  /* 오늘의 큐브 (2026-11-05, the user's pick of dist/samples/daily.html 안 A): its card at
+     the top of the home screen, its calendar page and its clear card. */
+  .daily-card { display: flex; align-items: center; gap: 12px; width: 100%; margin: 6px 0 14px; padding: 12px 12px 12px 10px; border: 0; border-radius: 22px; background: linear-gradient(180deg, #fff, #fff4ef); box-shadow: 0 6px 0 #f1dcd6, 0 12px 24px #b48aa033; color: #4a3f5c; text-align: left; }
+  .daily-card .cal { position: relative; width: 58px; height: 58px; flex: none; }
+  .daily-card .cal svg { width: 58px; height: 58px; }
+  .daily-card .cal b { position: absolute; left: 0; right: 0; top: 24px; text-align: center; font-size: 17px; font-weight: 900; color: #5a4862; }
+  .daily-card .txt { flex: 1; min-width: 0; display: grid; gap: 3px; }
+  .daily-card strong { font-size: 17px; font-weight: 800; letter-spacing: 0.5px; }
+  .daily-card small { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: #a091a6; }
+  .daily-card .month { display: inline-flex; align-items: center; gap: 2px; color: #c98a12; }
+  .daily-card .month svg { width: 14px; height: 14px; }
+  .daily-card .go { width: 56px; height: 52px; flex: none; display: grid; place-items: center; border-radius: 26px; background: linear-gradient(180deg, #f9a093, #ec7868); box-shadow: 0 4px 0 #c95f52, 0 8px 14px #e2786a40; color: #fff; }
+  .daily-card .go svg { width: 22px; height: 22px; }
+  .daily-card.done .go { background: #fff; box-shadow: inset 0 0 0 2px #f1e2e6, 0 3px 0 #ead9d5; color: #e2786a; }
+  .daily-card.done .go svg path { stroke-width: 3; }
+  .dots { display: inline-flex; gap: 3px; }
+  .dots i { width: 7px; height: 7px; border-radius: 50%; background: #eadde4; }
+  .dots i.on { background: #ec7868; }
+  .dl-cup { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 10px 14px; border-radius: 20px; background: #ffffffc0; }
+  .dl-cup svg { width: 54px; height: 54px; flex: none; }
+  .dl-bar { flex: 1; display: grid; gap: 6px; font-size: 13px; font-weight: 800; color: #7c6a8c; }
+  .dl-bar i { position: relative; height: 12px; border-radius: 999px; background: #f4ebee; box-shadow: inset 0 2px 3px #4a3f5c1f; }
+  .dl-bar i::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--k); border-radius: 999px; background: linear-gradient(180deg, #ffd768, #f5b13a); }
+  .dl-cal { padding: 12px 10px 14px; border-radius: 22px; background: #fff; box-shadow: 0 6px 0 #f1dcd6; }
+  .dl-cal h3 { margin: 0 6px 10px; font-size: 16px; }
+  .dl-week, .dl-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; }
+  .dl-week > span { display: grid; justify-items: center; gap: 3px; font-size: 11px; font-weight: 800; color: #a091a6; }
+  .dl-week .dots { gap: 1.5px; }
+  .dl-week .dots i { width: 4px; height: 4px; }
+  .dl-days { margin-top: 8px; }
+  .dl-days button { position: relative; aspect-ratio: 1; padding: 0; display: grid; place-items: center; border: 0; border-radius: 12px; background: #fbf4f2; font-size: 13px; font-weight: 800; color: #c4b6c3; }
+  .dl-days button:disabled { opacity: 1; }
+  .dl-days .past { color: #8a7a92; background: #f8eeee; }
+  .dl-days .done { background: #fff; color: transparent; }
+  .dl-days .done .stamp { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); transform: rotate(-8deg); }
+  .dl-days .today { color: #e2786a; background: #fff; box-shadow: 0 0 0 3px #f5a596; }
+  .dl-days .blank { visibility: hidden; }
+  .dl-play { display: flex; justify-content: center; margin: 18px 0 8px; }
+  .dl-play button { height: 54px; padding: 0 30px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 27px; background: linear-gradient(180deg, #f9a093, #ec7868); box-shadow: 0 4px 0 #c95f52, 0 8px 14px #e2786a40; color: #fff; font-size: 20px; font-weight: 800; text-shadow: 0 1px 0 #cf6255; }
+  .dl-play svg { width: 20px; height: 20px; }
   /* The home screen's tabs (2026-11-03): the shop, the worlds and the climb, in a dock
      floating over the bottom with toy icons, the tab picked raised in a white bubble (the
      others faded); on the worlds' tab the daily gift's box floats at the side. */
@@ -416,6 +494,34 @@
   .card .reward .retry > svg:first-child { width: 21px; height: 21px; }
   .card .reward .retry > svg:first-child path { stroke-width: 2.8; }
   .card .reward .retry .crown { width: 28px; height: 28px; }
+  /* A hard stage's flame before the card's title, and in the stage's name; its banner
+     drops in at the start and fades away. */
+  .card h2.ribbon .hot { display: block; flex: none; width: 30px; height: 30px; margin: -6px 0; filter: drop-shadow(0 1px 0 #0000001f); }
+  /* 오늘의 큐브's clear card: its time and mistakes (or crown), a month's cup when it fills,
+     and its buttons: share and the calendar. */
+  .card .dl-res { display: flex; justify-content: center; gap: 8px; margin: 2px 0 12px; }
+  .card .dl-res span { display: flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 999px; background: #f6eef2; color: #5a4862; font-size: 15px; font-weight: 800; }
+  .card .dl-res svg { width: 18px; height: 18px; }
+  .card .dl-res .crown { width: 22px; height: 22px; }
+  .card .reward .cup-bonus { display: flex; align-items: center; gap: 1px; margin-left: 2px; padding: 2px 10px 2px 4px; border-radius: 999px; background: #fff4dc; color: #c98a12; font-size: 16px; font-style: normal; font-weight: 800; }
+  .card .reward .cup-bonus svg { width: 26px; height: 26px; }
+  .card .toy-btns .share { padding: 0 16px 0 10px; background: linear-gradient(180deg, #f5f8ff, #dfe7fb); box-shadow: 0 4px 0 #b9c6ea, 0 8px 14px #7f9de62e; color: #5a6fae; font-size: 17px; }
+  .card .toy-btns .share svg, .card .toy-btns .cal svg { width: 34px; height: 34px; }
+  .card .toy-btns .cal { min-width: 0; width: 120px; }
+  #stageLabel .hot { display: inline-block; width: 15px; height: 15px; margin-right: 2px; vertical-align: -2px; }
+  .hard-banner { position: fixed; left: 50%; top: 25%; z-index: 41; display: flex; align-items: center; gap: 6px; padding: 12px 26px 13px 18px; border-radius: 14px; color: #fff; font-size: 26px; font-weight: 800; letter-spacing: 1px; white-space: nowrap; pointer-events: none; transform: translateX(-50%); animation: hard-in 1.9s both; }
+  .hard-banner svg { width: 38px; height: 38px; margin: -6px 0; filter: drop-shadow(0 2px 0 #00000022); }
+  .hard-banner.h1 { background: linear-gradient(180deg, #ff8a6a, #ec5c45); box-shadow: 0 8px 18px #ec5c4566; text-shadow: 0 2px 0 #c9473a; }
+  .hard-banner.h2 { background: linear-gradient(180deg, #b48af0, #8253cc); box-shadow: 0 8px 18px #8253cc66; text-shadow: 0 2px 0 #6a3cb0; }
+  .hard-banner::before, .hard-banner::after { content: ''; position: absolute; bottom: -9px; width: 16px; height: 9px; background: #00000033; }
+  .hard-banner::before { left: 0; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+  .hard-banner::after { right: 0; clip-path: polygon(0 0, 100% 0, 0 100%); }
+  @keyframes hard-in {
+    0% { transform: translate(-50%, -40px) scale(0.6); opacity: 0; }
+    14% { transform: translate(-50%, 0) scale(1.08); opacity: 1; }
+    22%, 78% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -14px); opacity: 0; }
+  }
   .card .climb-won small svg { width: 15px; height: 15px; }
   .card.cheer .tip { margin: 6px auto 0; }
   .card .hearts-from { display: flex; align-items: center; justify-content: center; gap: 6px; width: fit-content; margin: -2px auto 18px; padding: 7px 15px 7px 12px; border-radius: 999px; background: #fde6e2; color: var(--accent); font-size: 14px; font-weight: 800; }
@@ -469,6 +575,16 @@
   .node .cap svg { display: block; width: 30px; height: 30px; }
   .wp-title small .crowns { display: inline-flex; align-items: center; gap: 1px; color: #c98a12; }
   .wp-title small .crowns svg { width: 16px; height: 16px; margin-top: -2px; }
+  /* A hard stage (2026-11-05, dist/samples/hard.html 안 B): a red ring (어려움) or a purple
+     one (매우 어려움) and its flame under the button. */
+  .node .hf { position: absolute; left: 50%; bottom: -15px; width: 28px; height: 28px; margin-left: -14px; filter: drop-shadow(0 2px 1px #4a3f5c33); pointer-events: none; }
+  .node .hf svg { display: block; width: 28px; height: 28px; }
+  .node.hard1 { box-shadow: 0 0 0 4px #ff6d52, 0 5px 0 4px #d6493a, 0 8px 16px #ff6d5266; }
+  .node.hard2 { box-shadow: 0 0 0 4px #a274e6, 0 5px 0 4px #7a4cc0, 0 8px 16px #a274e666; }
+  .node.hard1:not(.done) { color: #ec5c45; }
+  .node.hard2:not(.done) { color: #8253cc; }
+  .node.here.hard1 { box-shadow: 0 0 0 5px #ff6d52, 0 6px 0 5px #d6493a, 0 0 28px #ff6d52aa; }
+  .node.here.hard2 { box-shadow: 0 0 0 5px #a274e6, 0 6px 0 5px #7a4cc0, 0 0 28px #a274e6aa; }
   .tut-at { position: absolute; transform: translate(-50%, -50%); }
   .tut-btn { display: flex; align-items: center; gap: 6px; height: 50px; padding: 0 18px 0 16px; border: 0; border-radius: 25px; font-size: 15px; font-weight: 800; color: #fff; background: linear-gradient(180deg, var(--acc-l), var(--acc)); box-shadow: 0 5px 0 var(--acc-d), 0 8px 14px #4a3f5c2e; text-shadow: 0 1px 0 var(--acc-d); white-space: nowrap; }
   .tut-btn > svg { width: 18px; height: 18px; }
@@ -567,6 +683,7 @@
   @keyframes tick-pop { from { transform: scale(0); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) {
     .world-orb .orb-ball, .world-orb .orb-ring, .gift-box.ready svg, .card .primary::after, .rays, .card .track .star-new, .card h2.ribbon .crown-top, .crown-pill.cracked { animation: none; }
+    .hard-banner { animation: none; }
   }
 </style>
 <script type="importmap">
@@ -701,6 +818,15 @@
     </header>
     <div class="page-body" id="shopPageBody"><div class="shop-list" id="shopList"></div></div>
   </div>
+  <!-- 오늘의 큐브's calendar (2026-11-05, dist/samples/daily.html): the month's cup, its
+       days with their stamps and the day to play. game.js renderDaily fills it. -->
+  <div class="page daily-page" id="dailyPage" hidden>
+    <header class="page-head">
+      <button class="back" id="dailyBack" aria-label="뒤로"></button>
+      <b>오늘의 큐브</b>
+    </header>
+    <div class="page-body" id="dailyBody"></div>
+  </div>
 
   <div class="home" id="home" hidden>
     <header class="home-head">
@@ -711,6 +837,7 @@
     </header>
     <div class="home-body" id="homeBody"></div>
     <div class="home-body shop-tab" id="shopTab" hidden></div>
+    <div class="home-body collect-tab" id="collectTab" hidden></div>
     <div class="climb-tab" id="climbTab" hidden>
       <div class="climb-head">
         <div class="climb-title"><b id="climbSeason"></b><span id="climbLeft"></span></div>
@@ -723,6 +850,7 @@
     <nav class="tabbar" aria-label="홈 화면">
       <button class="tab" id="tabShop"><i></i>상점</button>
       <button class="tab on" id="tabHome"><i></i>홈</button>
+      <button class="tab" id="tabCollect"><i></i>모음<span class="dot"></span></button>
       <button class="tab" id="tabClimb"><i></i>이벤트</button>
     </nav>
   </div>

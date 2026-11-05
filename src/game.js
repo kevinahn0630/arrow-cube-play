@@ -3,11 +3,13 @@ import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 import { generate, add, scale, dot, cross, axisOf } from './cube.js';
 import { SHAPES, surfaceOf, fitSolid, START_VIEW } from './shapes.js';
 import { LANDMARKS } from './landmarks.js';
+import { miniature } from './miniature.js';
+import { DAILY_FROM, LEVEL as DAILY_LEVEL, levelOf, weekday, lookOf as dailyLook, dailyStage, monthDays, monthDone, DAILY_COINS, MONTH_COINS } from './daily.js';
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, cutBy, darkCell, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
-import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadPerfect, markPerfect, isPerfect, perfectCount, loadWallet, saveWallet } from './progress.js';
-import { coinsFor, perfectBonus, PRICE, PACKS, NO_ADS, AD_EVERY, AD_GAP, GIFTS, giftDay, giftReady, CLIMB_STEP, climbPoints, climbRewards, hintFor, erasable } from './economy.js';
+import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadPerfect, markPerfect, isPerfect, perfectCount, loadDaily, saveDaily, loadWallet, saveWallet } from './progress.js';
+import { stageCoins, hardness, perfectBonus, PRICE, PACKS, NO_ADS, AD_EVERY, AD_GAP, GIFTS, giftDay, giftReady, CLIMB_STEP, climbPoints, climbRewards, hintFor, erasable } from './economy.js';
 import { rewarded, interstitial, sinceAd, native } from './ads.js';
 import { canSell, startBilling, buyProduct, priceOf } from './billing.js';
 import { ICON, rewardIcon } from './icons.js';
@@ -300,7 +302,9 @@ function turnFaces() {
 // ---------- game state
 
 const game = {
-  world: 'home', // a key of WORLDS, or 'free' for the generator panel
+  world: 'home', // a key of WORLDS, 'free' for the generator panel, or 'daily' for 오늘의 큐브
+  day: '', // the day of 오늘의 큐브 being played, 'YYYY-MM-DD'
+  t0: 0, // when the puzzle came up (오늘의 큐브's time)
   stage: 1,
   lastWorld: 'home', // where ◀ ▶ lead back to from the generator
   params: null,
@@ -1124,7 +1128,7 @@ function load(params) {
     wallet.climb.row = 0;
     saveWallet(wallet);
   }
-  game.counts = game.world !== 'free' && WORLDS[game.world].tier > 0;
+  game.counts = !!WORLDS[game.world]?.tier;
   game.moved = false;
   game.misses = 0;
   game.helped = false;
@@ -1149,10 +1153,12 @@ function load(params) {
   game.fell = [];
   game.pieces = [];
   makeLabels();
-  // The generator panel borrows the look of the world its gimmick comes from.
-  const look = game.world === 'free' ? (params.gimmick ?? 'home') : game.world;
+  // The generator panel borrows the look of the world its gimmick comes from, and a day
+  // of 오늘의 큐브 its country's.
+  const look = lookNow();
   applyTheme(themeOf(look));
   showScenery(look);
+  game.t0 = performance.now();
   game.cleared = false;
   game.autoSolved = false;
   game.remaining = puz.arrows.length;
@@ -1213,6 +1219,18 @@ function loadStage(world, stage) {
   // Stage puzzles are fixed; tools/bake-stages.mjs picks their seeds offline.
   const baked = STAGE_SEEDS[world][game.stage - 1];
   load({ ...preset(world, game.stage), seed: baked.seed, ...(baked.N ? { N: baked.N } : {}) });
+  const h = hardness(world, game.stage);
+  if (h) hardBanner(h);
+}
+
+// A hard stage, entered (not started over), shows its banner (어려움! or 매우 어려움!)
+// dropping in over the cube and fading away.
+function hardBanner(h) {
+  document.querySelector('.hard-banner')?.remove();
+  const b = node('div', `hard-banner h${h}`);
+  b.innerHTML = `${h === 2 ? ICON.harder : ICON.hard}<span>${h === 2 ? '매우 어려움!' : '어려움!'}</span>`;
+  document.body.append(b);
+  setTimeout(() => b.remove(), 1900);
 }
 
 // Starts the stage on now over; a tutorial from its first step.
@@ -1717,9 +1735,12 @@ function frame(now) {
 
 // ---------- UI
 
+// The look the puzzle is in: its world's, the generator's gimmick's, a day's country's.
+const lookNow = () => (game.world === 'free' ? (game.params?.gimmick ?? 'home') : game.world === 'daily' ? dailyLook(game.day) : game.world);
+
 function hud() {
   // The world's flag, drawn again only when the world changes.
-  const look = game.world === 'free' ? (game.params.gimmick ?? 'home') : game.world;
+  const look = lookNow();
   if ($('worldFlag').dataset.world !== look) {
     $('worldFlag').dataset.world = look;
     $('worldFlag').innerHTML = worldIcon(look);
@@ -1727,9 +1748,13 @@ function hud() {
   if (game.world === 'free') {
     $('world').textContent = `🧪 생성기${game.params.gimmick ? ` · ${WORLDS[game.params.gimmick].name}` : ''}`;
     $('stageLabel').textContent = `시드 ${game.params.seed}`;
+  } else if (game.world === 'daily') {
+    $('world').textContent = '오늘의 큐브';
+    $('stageLabel').textContent = `${dayName(game.day)} ▾`;
   } else {
     $('world').textContent = shortName(game.world);
-    $('stageLabel').textContent = game.stage ? `스테이지 ${game.stage} / ${WORLDS[game.world].stages.length} ▾` : '튜토리얼 ▾';
+    const h = game.stage ? hardness(game.world, game.stage) : 0;
+    $('stageLabel').innerHTML = (h ? (h === 2 ? ICON.harder : ICON.hard) : '') + (game.stage ? `스테이지 ${game.stage} / ${WORLDS[game.world].stages.length} ▾` : '튜토리얼 ▾');
   }
   $('remain').textContent = game.remaining;
 }
@@ -1750,7 +1775,7 @@ function hud() {
 // ribbon is gold with a `crown` dropping onto it, and its first time a `bonus` stands by
 // the coins; one that missed its crown has a grey cracked one to `retry` there. A card
 // that comes up pops in with its parts rising one after another.
-function showCard({ close, icon, title, flag, celebrate, crown, note, track, body, won, wonFrom = 0, doubled, bonus, retry, climb, pay, has, buyCoins, tip, hearts, ad, restart, next }) {
+function showCard({ close, icon, title, flag, hard, celebrate, crown, note, track, souvenir, body, won, wonFrom = 0, doubled, bonus, retry, climb, pay, has, buyCoins, tip, hearts, ad, restart, next, toys }) {
   const card = $('card');
   const fresh = $('clear').hidden || $('clear').classList.contains('closing');
   clearTimeout(closing);
@@ -1778,6 +1803,10 @@ function showCard({ close, icon, title, flag, celebrate, crown, note, track, bod
     h.classList.add('flagged');
     h.prepend(f);
   }
+  if (hard) {
+    h.classList.add('flagged');
+    h.insertAdjacentHTML('afterbegin', hard === 2 ? ICON.harder : ICON.hard);
+  }
   if (crown) {
     const c = node('span', 'crown-top');
     c.innerHTML = ICON.crown;
@@ -1786,6 +1815,11 @@ function showCard({ close, icon, title, flag, celebrate, crown, note, track, bod
   card.append(h);
   if (note) card.append(node('p', 'clear-stars', note));
   if (track) card.append(trackOf(track, fresh));
+  if (souvenir) {
+    const s = node('div', 'sv-new');
+    s.innerHTML = `${miniature(LANDMARKS[souvenir.key].blocks, themeOf(souvenir.world).accent, { size: 130 })}<b>${LANDMARKS[souvenir.key].name}</b>`;
+    card.append(s);
+  }
   if (body) card.append(body);
   if (won !== undefined) {
     const r = node('div', 'reward');
@@ -1843,6 +1877,11 @@ function showCard({ close, icon, title, flag, celebrate, crown, note, track, bod
     const row = node('div', 'toy-btns');
     if (ad) row.append(adButton('tv', ICON.tv));
     if (next) row.append(nextButton('primary next'));
+    for (const t of toys ?? []) {
+      const b = button(t.cls, t.html, t.then);
+      if (t.label) b.setAttribute('aria-label', t.label);
+      row.append(b);
+    }
     card.append(row);
   } else {
     if (ad && !ad.primary) card.append(adButton('ad'));
@@ -1926,16 +1965,18 @@ const showNoHearts = () =>
   });
 
 // The clear card. A world stage cleared by hand is recorded and pays its coins
-// (economy.js coinsFor; a fifth if it was cleared before), which an ad doubles once; the
-// card's bar shows where the world stands, with a star just earned popping in (the coins
-// the player has are not on it: the bar under the cube shows them, and the coins fly
-// there). The last stage's ribbon carries the world's flag. That a stage cleared again
+// (economy.js stageCoins: more for a hard stage, whose flame leads the title; a fifth if
+// it was cleared before), which an ad doubles once; the card's bar shows where the world
+// stands, with a star just earned popping in (the coins the player has are not on it:
+// the bar under the cube shows them, and the coins fly there). The last stage's ribbon
+// carries the world's flag. That a stage cleared again
 // pays a fifth is told once: on 집 안's first stage, or the first time it happens. A
 // perfect clear wins the stage its crown: the ribbon turns gold and says 퍼펙트! (the
 // last stage keeps its flag and 완료!), and the first time pays the bonus too, which
 // the ad doubles with the rest; a stage still without its crown offers a retry.
 function showClear() {
   if (game.tut) return showTutorialDone();
+  if (game.world === 'daily') return showDailyClear();
   const inWorld = game.world !== 'free';
   const w = WORLDS[game.world];
   const last = inWorld && game.stage === w.stages.length;
@@ -1953,8 +1994,12 @@ function showClear() {
     const again = isCleared(progress, game.world, game.stage);
     const was = clearedCount(progress, game.world);
     markCleared(progress, game.world, game.stage);
+    // A landmark cleared for the first time: its souvenir, into the 모음 tab.
+    const landmark = WORLDS[game.world].stages[game.stage - 1].shape;
+    if (!again && LANDMARKS[landmark]) parts.souvenir = { world: game.world, key: landmark };
     parts.track = { cleared: clearedCount(progress, game.world), was, total: w.stages.length, stars: w.tier > 0 };
-    const won = coinsFor(game.world, game.stage, again);
+    const won = stageCoins(game.world, game.stage, again);
+    parts.hard = hardness(game.world, game.stage);
     let bonus = 0;
     if (perfectSoFar()) {
       if (markPerfect(perfects, game.world, game.stage)) bonus = perfectBonus(game.world, game.stage);
@@ -2278,7 +2323,7 @@ const closeShopPage = () => ($('shopPage').hidden = true);
 
 // The home screen's tabs (2026-11-03): the shop, the worlds (with the daily gift's box)
 // and the climb. A tab picked slides in from its side, its button popping up.
-const TABS = { shop: ['tabShop', 'shopTab'], home: ['tabHome', 'homeBody'], climb: ['tabClimb', 'climbTab'] };
+const TABS = { shop: ['tabShop', 'shopTab'], home: ['tabHome', 'homeBody'], collect: ['tabCollect', 'collectTab'], climb: ['tabClimb', 'climbTab'] };
 let tabOn = 'home';
 function showTab(tab) {
   const order = Object.keys(TABS);
@@ -2292,6 +2337,7 @@ function showTab(tab) {
   if (tab === 'home') layoutOrbs();
   if (tab === 'shop') $('shopTab').append($('shopList'));
   if (tab === 'climb') renderClimb();
+  if (tab === 'collect') renderCollect();
   if (!turn) return;
   replay($(TABS[tab][0]).querySelector('i'), 'pop');
   if (!calm) $(TABS[tab][1]).animate([{ transform: `translateX(${turn * 56}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
@@ -2479,11 +2525,14 @@ function renderHome() {
   $('homeStars').innerHTML = `<span class="stars">★</span> ${total} / ${COUNTRIES.length * STAR_AT.length}`;
   const body = $('homeBody');
   body.replaceChildren();
+  body.append(dailyCard());
+  showCollectDot();
   if (game.playing && game.world !== 'free' && !game.cleared && !game.stuck) {
     const back = node('button', 'continue');
     const text = node('span', 'continue-text');
-    text.append(node('b', '', '이어서 하기'), node('small', '', `${shortName(game.world)} · ${game.stage ? `스테이지 ${game.stage}` : '튜토리얼'}`));
-    back.append(flagOf(game.world), text);
+    const where = game.world === 'daily' ? `오늘의 큐브 · ${dayName(game.day)}` : `${shortName(game.world)} · ${game.stage ? `스테이지 ${game.stage}` : '튜토리얼'}`;
+    text.append(node('b', '', '이어서 하기'), node('small', '', where));
+    back.append(flagOf(lookNow()), text);
     back.onclick = play;
     body.append(back);
   }
@@ -2565,6 +2614,210 @@ function layoutOrbs() {
   }
 }
 
+// ---------- the 모음 tab (2026-11-05, the user's pick of dist/samples/souvenir.html 안 B)
+
+// The countries by tier, as the home screen lists them. Each has two souvenirs, its
+// landmarks' miniatures (miniature.js), won by clearing the stages they stand on (35
+// and 40), and a stamp in the passport once its last stage is cleared, crowned once
+// every stage of it is.
+const BY_TIER = [1, 2, 3].flatMap((t) => COUNTRIES.filter((w) => WORLDS[w].tier === t));
+const souvenirs = () =>
+  BY_TIER.flatMap((w) => [35, 40].map((s) => ({ world: w, stage: s, key: WORLDS[w].stages[s - 1].shape, got: isCleared(progress, w, s) })));
+// The tab has a dot while it has souvenirs the player has not looked at yet.
+function showCollectDot() {
+  $('tabCollect').classList.toggle('new', souvenirs().filter((v) => v.got).length > wallet.collected);
+}
+function renderCollect() {
+  const list = souvenirs();
+  const got = list.filter((v) => v.got).length;
+  if (wallet.collected !== got) {
+    wallet.collected = got;
+    saveWallet(wallet);
+  }
+  showCollectDot();
+  const body = $('collectTab');
+  body.replaceChildren();
+  const head = node('div', 'cl-head');
+  head.append(node('b', '', '모음'), node('small', '', `${got} / ${list.length}`));
+  const pass = node('div', 'cl-pass');
+  const stamped = BY_TIER.filter((w) => isCleared(progress, w, WORLDS[w].stages.length));
+  pass.innerHTML = `<h3>PASSPORT · 여권<b>도장 ${stamped.length} / ${BY_TIER.length}</b></h3>`;
+  const stamps = node('div', 'cl-stamps');
+  for (const w of BY_TIER) {
+    const on = stamped.includes(w);
+    const b = node('button', on ? 'on' : '');
+    b.style.setProperty('--c', themeOf(w).accent);
+    b.innerHTML = `<span class="flag">${worldIcon(w)}</span>${on && perfectCount(perfects, w) === WORLDS[w].stages.length ? ICON.crown : ''}`;
+    b.setAttribute('aria-label', `${shortName(w)}${on ? ', 도장' : ''}`);
+    b.onclick = () => openWorld(w);
+    stamps.append(b);
+  }
+  pass.append(stamps);
+  body.append(head, pass);
+  const cups = cupsRow();
+  if (cups) body.append(cups);
+  const cab = node('div', 'cl-cab');
+  for (const v of list) {
+    const b = node('button', v.got ? '' : 'no');
+    b.innerHTML = `${miniature(LANDMARKS[v.key].blocks, themeOf(v.world).accent, { locked: !v.got, size: 100 })}<span>${v.got ? LANDMARKS[v.key].name : '?'}</span>`;
+    b.setAttribute('aria-label', v.got ? LANDMARKS[v.key].name : `${shortName(v.world)} ${v.stage}스테이지의 기념품`);
+    b.onclick = () => showSouvenir(v);
+    cab.append(b);
+  }
+  body.append(cab);
+}
+// A souvenir up close: big, with its country and stage; one still to win in grey.
+function showSouvenir({ world, stage, key, got }) {
+  const body = node('div', 'sv-big');
+  body.innerHTML = `${miniature(LANDMARKS[key].blocks, themeOf(world).accent, { locked: !got, size: 220 })}<small><span class="flag">${worldIcon(world)}</span>${shortName(world)} · ${stage}스테이지</small>`;
+  showCard({ close: true, title: got ? LANDMARKS[key].name : '?', body });
+}
+// 오늘의 큐브's cups: each month filled, and this month's still filling. None before the
+// first day is played.
+function cupsRow() {
+  const now = today().slice(0, 7);
+  const months = [...new Set([...Object.keys(daily.cups), ...Object.keys(daily.days).map((d) => d.slice(0, 7))])].filter((m) => m !== now).sort();
+  if (!Object.keys(daily.days).length) return null;
+  const row = node('div', 'cl-cups');
+  for (const m of [...months, now]) {
+    const f = node('figure');
+    const done = monthDays(m).filter((d) => daily.days[d]).length;
+    f.innerHTML = `${daily.cups[m] ? ICON.cupOn : ICON.cupOff}<figcaption>${Number(m.slice(5))}월${daily.cups[m] ? '' : ` ${done}/${monthDays(m).length}`}</figcaption>`;
+    row.append(f);
+  }
+  return row;
+}
+
+// ---------- 오늘의 큐브 (2026-11-05, the user's pick of dist/samples/daily.html 안 A)
+
+// The days played (progress.js), the weekdays' names, a day as 11월 5일, a level as
+// dots, a time as 1:42.
+const daily = loadDaily();
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+const dayName = (day) => `${Number(day.slice(5, 7))}월 ${Number(day.slice(8))}일`;
+const dotsOf = (n) => `<span class="dots">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
+const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+
+// The home screen's card for today: its date, its level and this month's stamps; ▶ plays
+// it (a check once it is cleared), the rest opens the calendar.
+function dailyCard() {
+  const now = today();
+  const done = !!daily.days[now];
+  const stamps = monthDays(now.slice(0, 7)).filter((d) => daily.days[d]).length;
+  const b = node('button', `daily-card${done ? ' done' : ''}`);
+  b.innerHTML =
+    `<span class="cal">${ICON.calendar}<b>${Number(now.slice(8))}</b></span>` +
+    `<span class="txt"><strong>오늘의 큐브</strong><small>${dayName(now)} ${WEEKDAYS[weekday(now)]} ${dotsOf(levelOf(now))}<span class="month">${ICON.stamp}${stamps}</span></small></span>` +
+    `<span class="go">${done ? ICON.check : ICON.go}</span>`;
+  b.setAttribute('aria-label', `오늘의 큐브, ${dayName(now)}${done ? ', 깸' : ''}`);
+  b.onclick = (e) => (!done && e.target.closest('.go') ? playDay(now) : openDaily());
+  return b;
+}
+
+// Into a day's puzzle (baked, daily.js dailyStage), in its country's look.
+function playDay(day) {
+  closeDaily();
+  closeCard();
+  play();
+  game.world = 'daily';
+  game.day = day;
+  game.stage = 0;
+  load(dailyStage(day));
+}
+
+// The calendar: the month's cup and how full it is, the days with their stamps (gold
+// for a perfect clear), today ringed; a day up to today can be played (again), and a
+// button plays the latest one still to clear.
+function openDaily() {
+  $('dailyPage').hidden = false;
+  renderDaily();
+}
+const closeDaily = () => ($('dailyPage').hidden = true);
+function renderDaily() {
+  const now = today();
+  const month = now.slice(0, 7);
+  const days = monthDays(month);
+  const done = days.filter((d) => daily.days[d]).length;
+  const body = $('dailyBody');
+  body.replaceChildren();
+  const cup = node('div', 'dl-cup');
+  cup.innerHTML = `${daily.cups[month] ? ICON.cupOn : ICON.cupOff}<div class="dl-bar"><span>${Number(month.slice(5))}월 트로피 · ${done} / ${days.length}</span><i style="--k:${((100 * done) / days.length).toFixed(1)}%"></i></div>`;
+  const cal = node('div', 'dl-cal');
+  cal.innerHTML = `<h3>${month.slice(0, 4)}년 ${Number(month.slice(5))}월</h3><div class="dl-week">${WEEKDAYS.map((n, i) => `<span>${n}${dotsOf(DAILY_LEVEL[i])}</span>`).join('')}</div>`;
+  const grid = node('div', 'dl-days');
+  for (let i = 0; i < weekday(days[0]); i++) grid.append(node('span', 'blank'));
+  for (const d of days) {
+    const rec = daily.days[d];
+    const b = node('button', rec ? 'done' : d === now ? 'today' : d < now ? 'past' : '', String(Number(d.slice(8))));
+    if (rec) b.insertAdjacentHTML('beforeend', rec.perfect ? ICON.stampGold : ICON.stamp);
+    b.disabled = d > now || d < DAILY_FROM;
+    b.setAttribute('aria-label', `${dayName(d)}${rec ? (rec.perfect ? ', 퍼펙트' : ', 깸') : ''}`);
+    b.onclick = () => playDay(d);
+    grid.append(b);
+  }
+  cal.append(grid);
+  body.append(cup, cal);
+  const next = [...days].reverse().find((d) => d <= now && d >= DAILY_FROM && !daily.days[d]);
+  if (next) {
+    const row = node('div', 'dl-play');
+    const b = node('button');
+    b.innerHTML = `${ICON.go}${Number(next.slice(8))}일 하기`;
+    b.onclick = () => playDay(next);
+    row.append(b);
+    body.append(row);
+  }
+}
+
+// A day cleared: its best kept (a perfect one, the shortest time, the fewest mistakes),
+// DAILY_COINS if it is cleared on the day for the first time, and once every day of
+// this month is cleared, its cup and MONTH_COINS. The card shows the day, the time and
+// the mistakes (or the crown), and its buttons share the result and open the calendar.
+function showDailyClear() {
+  const day = game.day;
+  const perfect = perfectSoFar();
+  const time = Math.max(1, Math.round((performance.now() - game.t0) / 1000));
+  const was = daily.days[day];
+  daily.days[day] = { perfect: perfect || !!was?.perfect, time: Math.min(time, was?.time ?? time), misses: Math.min(game.misses, was?.misses ?? game.misses) };
+  const coins = wallet.coins;
+  const won = !was && day === today() ? DAILY_COINS : 0;
+  const month = day.slice(0, 7);
+  const cup = !daily.cups[month] && month === today().slice(0, 7) && monthDone(month, daily.days) ? MONTH_COINS : 0;
+  if (cup) daily.cups[month] = true;
+  saveDaily(daily);
+  if (won + cup) earn(won + cup);
+  const res = node('div', 'dl-res');
+  res.innerHTML =
+    `<span>${ICON.clock}${clock(time)}</span><span>${perfect ? ICON.crown : `${ICON.close}${game.misses}`}</span>` +
+    (cup ? `<span>${ICON.cupOn}+${digits(cup)}</span>` : '');
+  showCard({
+    title: dayName(day),
+    celebrate: true,
+    crown: perfect,
+    body: res,
+    won: won || undefined,
+    toys: [
+      { cls: 'share', html: `${ICON.plane}공유`, label: '결과 공유', then: () => shareDay(day, { perfect, time, misses: game.misses }) },
+      { cls: 'primary next cal', html: ICON.calendar, label: '달력', then: () => (closeCard(), openDaily()) },
+    ],
+  });
+  if (wallet.coins > coins) setTimeout(() => payOut(coins, $('card').querySelector('.reward') ?? $('card')), 520);
+}
+// The result to share, as text without the puzzle: the system's share sheet where there
+// is one, else copied.
+const SHARE_URL = 'https://kevinahn0630.github.io/arrow-cube-play/';
+async function shareDay(day, { perfect, time, misses }) {
+  const text = `Arrow Cube 오늘의 큐브 ${Number(day.slice(5, 7))}/${Number(day.slice(8))} ${perfect ? '👑' : `✕${misses}`} · ${clock(time)}\n${SHARE_URL}`;
+  try {
+    if (navigator.share) await navigator.share({ text });
+    else {
+      await navigator.clipboard.writeText(text);
+      say('복사했어요');
+    }
+  } catch {
+    // Shared nowhere (the sheet closed, or no clipboard).
+  }
+}
+
 // A world's page (2026-11-04, the user's pick of dist/samples/world.html 안 B), from the
 // home screen's orbs or a stage's title; from the generator, the home screen. Its sky and
 // landmarks (scenery.js) stay behind while its stages, round buttons in its colour once
@@ -2574,6 +2827,7 @@ function layoutOrbs() {
 let worldOn = '';
 function openWorld(key = game.world) {
   if (key === 'free') return showHome();
+  if (key === 'daily') return openDaily();
   $('worldPage').hidden = false;
   showWorld(key);
 }
@@ -2636,11 +2890,13 @@ function showWorld(key) {
     const cleared = isCleared(progress, key, s);
     // A stage cleared perfectly is gold with a crown on top.
     const perfect = cleared && isPerfect(perfects, key, s);
-    const b = node('button', `node${cleared ? ' done' : ''}${perfect ? ' perfect' : ''}${s === here ? ' here' : ''}`, s);
+    const hard = hardness(key, s);
+    const b = node('button', `node${cleared ? ' done' : ''}${perfect ? ' perfect' : ''}${hard ? ` hard${hard}` : ''}${s === here ? ' here' : ''}`, s);
     if (perfect) b.insertAdjacentHTML('beforeend', `<span class="cap">${ICON.crown}</span>`);
+    if (hard) b.insertAdjacentHTML('beforeend', `<span class="hf">${hard === 2 ? ICON.harder : ICON.hard}</span>`);
     if (w.tier && STAR_AT.includes(s)) b.insertAdjacentHTML('beforeend', `<span class="badge">${cleared ? ICON.starOn : ICON.starOff}</span>`);
     if (DEV) b.title = `예상 오답 ${STAGE_SEEDS[key][s - 1].wrong}회`;
-    b.setAttribute('aria-label', `스테이지 ${s}${cleared ? ', 클리어' : ''}${perfect ? ', 퍼펙트' : ''}${game.playing && key === game.world && s === game.stage ? ', 지금 스테이지' : ''}`);
+    b.setAttribute('aria-label', `스테이지 ${s}${hard ? (hard === 2 ? ', 매우 어려움' : ', 어려움') : ''}${cleared ? ', 클리어' : ''}${perfect ? ', 퍼펙트' : ''}${game.playing && key === game.world && s === game.stage ? ', 지금 스테이지' : ''}`);
     b.onclick = go(s);
     place(b, at[s]);
     path.append(b);
@@ -2777,11 +3033,18 @@ $('homeCoins').onclick = () => showTab('shop');
 $('shopBack').innerHTML = ICON.back;
 $('shopBack').onclick = closeShopPage;
 // The home screen's tabs and the daily gift's box.
-for (const [id, tab, icon] of [['tabShop', 'shop', ICON.stall], ['tabHome', 'home', ICON.house], ['tabClimb', 'climb', ICON.rocket]]) {
+for (const [id, tab, icon] of [['tabShop', 'shop', ICON.stall], ['tabHome', 'home', ICON.house], ['tabCollect', 'collect', ICON.cabinet], ['tabClimb', 'climb', ICON.rocket]]) {
   $(id).querySelector('i').innerHTML = icon;
   $(id).onclick = () => showTab(tab);
 }
 $('giftBtn').insertAdjacentHTML('afterbegin', ICON.gift);
+$('dailyBack').innerHTML = ICON.back;
+$('dailyBack').onclick = () => {
+  closeDaily();
+  // From a day just cleared (its card's calendar) back is the home screen; from a day
+  // being played, back into it.
+  if (game.world === 'daily' && game.screen === 'play' && game.cleared) showHome();
+};
 $('giftBtn').onclick = openGift;
 // Purchases: paid out as they come, and Play's prices into the shop once it has them.
 startBilling({ coins: paidCoins, noAds: paidNoAds, change: renderShop });

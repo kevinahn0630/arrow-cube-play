@@ -2,6 +2,8 @@
 // and the eraser cost, which arrow a hint shows and which arrows the eraser may take.
 // Like rules.js, no DOM: the wallet itself is kept by progress.js.
 import { WORLDS } from './stages.js';
+import { STAGE_SEEDS } from './stage-seeds.js';
+import { LANDMARKS } from './landmarks.js';
 import { canExit, blockAt, copyState, remove, clocked, pose } from './rules.js';
 
 // Coins for a stage's first clear, by tier, the same for each block of ten stages
@@ -18,6 +20,23 @@ export function coinsFor(world, stage, again = false) {
 // eraser; 2026-11-05, the user's pick of dist/samples/perfect.html 안 B) pays half its
 // first clear's coins more, once.
 export const perfectBonus = (world, stage) => Math.round(coinsFor(world, stage) / 2);
+
+// Hard stages, told ahead (2026-11-05, the user's pick of dist/samples/hard.html 안 B):
+// in each country the hardest of stages 11-20 and of 21-30 by the baked expected wrong
+// taps is 어려움 (1), and its two landmarks (35, 40) are 매우 어려움 (2). They pay
+// HARD_PAY times their coins (stageCoins; the perfect bonus stays half the plain
+// coins). 집 안 and stages 1-10 have none.
+export const HARD_PAY = [1, 1.5, 2];
+const HARD = {};
+for (const [world, { tier, stages }] of Object.entries(WORLDS)) {
+  if (!tier) continue;
+  const wrong = (s) => STAGE_SEEDS[world][s - 1].wrong;
+  const top = (a, b) => Array.from({ length: b - a }, (_, i) => a + 1 + i).reduce((best, s) => (wrong(s) > wrong(best) ? s : best), a);
+  HARD[world] = stages.map((s) => (LANDMARKS[s.shape] ? 2 : 0));
+  for (const s of [top(11, 20), top(21, 30)]) HARD[world][s - 1] ||= 1;
+}
+export const hardness = (world, stage) => HARD[world]?.[stage - 1] ?? 0;
+export const stageCoins = (world, stage, again = false) => Math.round(coinsFor(world, stage, again) * HARD_PAY[hardness(world, stage)]);
 
 export const PRICE = { hint: 200, eraser: 500 };
 // What a new player starts with.

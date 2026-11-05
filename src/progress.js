@@ -53,6 +53,26 @@ export function markPerfect(perfect, world, stage) {
 export const isPerfect = (perfect, world, stage) => !!perfect[world]?.has(stage);
 export const perfectCount = (perfect, world) => perfect[world]?.size ?? 0;
 
+// 오늘의 큐브 (daily.js): the days cleared, 'YYYY-MM-DD' → { perfect, time (seconds),
+// misses } (the best of its plays), and the months every day of which was cleared,
+// whose cup and coins are paid, 'YYYY-MM' → true.
+const DAILY_KEY = 'arrowCube.daily.v1';
+export function loadDaily() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DAILY_KEY) ?? '{}');
+    return { days: raw.days ?? {}, cups: raw.cups ?? {} };
+  } catch {
+    return { days: {}, cups: {} };
+  }
+}
+export function saveDaily(daily) {
+  try {
+    localStorage.setItem(DAILY_KEY, JSON.stringify(daily));
+  } catch {
+    // Storage full or blocked: the days then last as long as the page.
+  }
+}
+
 // Stars a country has earned (0–3); home gives none.
 export const starsOf = (progress, world) =>
   WORLDS[world].tier ? STAR_AT.filter((n) => clearedCount(progress, world) >= n).length : 0;
@@ -86,7 +106,8 @@ export const tierOpen = (progress, tier) => totalStars(progress) >= TIER_STARS[t
 // (`noAds`) and the purchases already paid out (`paid`, Play transaction ids); stages
 // cleared since the last full-screen ad (`adClears`); the daily gift (`gift`) and the
 // climb (`climb`: its season, 'YYYY-MM', its points, the clears in a row, and the points
-// the 이벤트 tab last showed, `seen`, so it can walk the cube up from there). A new player
+// the 이벤트 tab last showed, `seen`, so it can walk the cube up from there); how many
+// souvenirs the 모음 tab has shown (`collected`, its dot is for new ones). A new player
 // starts with economy.js START.
 const WALLET_KEY = 'arrowCube.wallet.v1';
 export function loadWallet() {
@@ -105,6 +126,7 @@ export function loadWallet() {
     adClears: has(w?.adClears),
     gift: { n: has(w?.gift?.n), last: String(w?.gift?.last ?? '') },
     climb: { season: String(w?.climb?.season ?? ''), points: has(w?.climb?.points), row: has(w?.climb?.row), seen: has(w?.climb?.seen) },
+    collected: has(w?.collected),
   };
 }
 export function saveWallet(wallet) {

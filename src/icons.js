@@ -1,8 +1,8 @@
 // Small icons (SVG strings). The items, what the shop sells, the home screen's tabs, the
-// sound button, the stage's home button, the clear card's ad and a perfect clear's crown
-// are drawn like toys, soft and rounded with a lighter and a darker side and no outline
-// (2026-11-03 user picks, dist/samples/icons.html 안 1 and tabs2.html; 2026-11-04
-// clear.html 안 B; 2026-11-05 perfect.html 안 B); the rest are
+// sound button, the stage's home button, the clear card's ad, a perfect clear's crown and
+// a hard stage's flame are drawn like toys, soft and rounded with a lighter and a darker
+// side and no outline (2026-11-03 user picks, dist/samples/icons.html 안 1 and tabs2.html;
+// 2026-11-04 clear.html 안 B; 2026-11-05 perfect.html and hard.html 안 B); the rest are
 // line icons: round caps, strokes in currentColor. The coin is gold with the game's up arrow.
 const COIN = '<circle cx="10" cy="10" r="9.3" fill="#efb245"/><circle cx="10" cy="10" r="7" fill="#f8cb63" stroke="#fde4a3" stroke-width="1.2"/><path d="M10 13.7V6.8M7.3 9.4 10 6.7l2.7 2.7" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>';
 // A coin with a white rim, so coins lying on each other stay apart.
@@ -30,6 +30,29 @@ const crown = (on) => {
     <path d="M13.8 22.6l3.4 3.8" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="${on ? 0.7 : 0.5}"/>${
       on ? '' : '<path d="M25.4 14.6 22 21.6l4.4 3.2-3.6 6.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
     }</svg>`;
+};
+// A hard stage's flame, a toy: orange for 어려움, purple for 매우 어려움 (2026-11-05,
+// dist/samples/hard.html 안 B).
+const hot = (very) => {
+  const c = very ? { base: '#a274e6', side: '#8253cc', inner: '#dcc4ff' } : { base: '#ff7d5a', side: '#ec5c45', inner: '#ffcd62' };
+  return `<svg class="toy hot" viewBox="0 0 48 48" aria-hidden="true">
+    <path d="M24 4c2 7 11 11 11 22a11 11 0 0 1-22 0c0-6 3-10 6-13 0 4 1 6 3 7-1-7 0-12 2-16Z" fill="${c.base}" stroke="${c.base}" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M24 4c2 7 11 11 11 22a11 11 0 0 1-8.6 10.7C30 33 31 29 30 25c-1-6-5-10-6-21Z" fill="${c.side}"/>
+    <path d="M24 21c2 3 6 5 6 10a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 2 3 1-1-1-1-3 0-4Z" fill="${c.inner}" stroke="${c.inner}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M17.6 25.4c.2-2 1-3.6 2.2-5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0.7"/></svg>`;
+};
+// 오늘의 큐브's month cup, a toy: gold once the month is full, grey till then.
+const cup = (on) => {
+  const c = on ? ['#ffcd4a', '#f4ad37', '#ffeaa6'] : ['#e2d9e1', '#d2c6d1', '#f1ecf1'];
+  return toy(`<path d="M14 8h20v10a10 10 0 0 1-20 0Z" fill="${c[0]}"/><path d="M28 8h6v10a10 10 0 0 1-6 9.2Z" fill="${c[1]}"/>
+    <path d="M14 11H9a5 5 0 0 0 5 9M34 11h5a5 5 0 0 1-5 9" fill="none" stroke="${c[1]}" stroke-width="3" stroke-linecap="round"/>
+    <rect x="21" y="27" width="6" height="7" fill="${c[1]}"/><rect x="15" y="34" width="18" height="6" rx="2.5" fill="${c[0]}"/><path d="M27 34h3.5a2.5 2.5 0 0 1 2.5 2.5v1a2.5 2.5 0 0 1-2.5 2.5H27Z" fill="${c[1]}"/>
+    <path d="M18 12v6" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0.7"/><circle cx="24" cy="17" r="2.6" fill="${c[2]}"/>`);
+};
+// A day's stamp on 오늘의 큐브's calendar: a little cube, gold for a perfect clear.
+const stamp = (gold) => {
+  const [t, l, r] = gold ? ['#ffe08a', '#ffcd4a', '#f4ad37'] : ['#ffc2b6', '#f68c7c', '#e46f5e'];
+  return `<svg class="stamp" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 19.4 7.7v8.6L12 20.5l-7.4-4.2V7.7Z" fill="${l}"/><path d="M12 12v8.5l7.4-4.2V7.7Z" fill="${r}"/><path d="M12 3.5 19.4 7.7 12 12 4.6 7.7Z" fill="${t}"/></svg>`;
 };
 // A speaker, its sound waves in gold; muted, grey with a red cross.
 const speaker = (on) =>
@@ -114,6 +137,33 @@ export const ICON = {
   // A perfect clear's crown, and the grey cracked one of a stage that missed it.
   crown: crown(true),
   crownLost: crown(false),
+  // A hard stage's flame (어려움) and a very hard one's (매우 어려움).
+  hard: hot(false),
+  harder: hot(true),
+  // The 모음 tab: a display cabinet with little blocks on its shelves (dist/samples/souvenir.html 안 B).
+  cabinet: toy(`<ellipse cx="24" cy="44" rx="15" ry="2.6" fill="#4a3f5c" opacity="0.12"/>
+    <rect x="8" y="6" width="32" height="36" rx="5" fill="#f2b98f"/><path d="M32 6h3a5 5 0 0 1 5 5v26a5 5 0 0 1-5 5h-3Z" fill="#dd9c70"/>
+    <rect x="12" y="10" width="24" height="28" rx="2.5" fill="#fff5ec"/>
+    <rect x="12" y="23" width="24" height="3" fill="#e4a77c"/><rect x="12" y="35" width="24" height="3" fill="#e4a77c"/>
+    <path d="M15.5 16.5 19 14.5l3.5 2v4.5L19 23l-3.5-2Z" fill="#f68c7c"/><path d="M19 18.5l3.5-2V21L19 23Z" fill="#e46f5e"/><path d="M15.5 16.5 19 14.5l3.5 2-3.5 2Z" fill="#ffb8ab"/>
+    <rect x="25.5" y="12.5" width="5" height="10.5" rx="1" fill="#2fb3a6"/><rect x="28.5" y="12.5" width="2" height="10.5" fill="#1f978b"/>
+    <path d="M17 28.5h14l-1.4 6.5H18.4Z" fill="#ffcd4a"/><path d="M27 28.5h4l-1.4 6.5H26Z" fill="#f4ad37"/>
+    <path d="M15 14v6" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>`),
+  // 오늘의 큐브 (dist/samples/daily.html 안 A): a desk calendar, the month's cup, the
+  // share's paper plane, a day's stamp, and a stopwatch (a line icon) for its time.
+  calendar: toy(`<rect x="7" y="10" width="34" height="32" rx="6" fill="#fff4ec"/><path d="M33 10h2a6 6 0 0 1 6 6v20a6 6 0 0 1-6 6h-2Z" fill="#f2ddd0"/>
+    <path d="M7 16a6 6 0 0 1 6-6h22a6 6 0 0 1 6 6v4H7Z" fill="#f68c7c"/><path d="M33 10h2a6 6 0 0 1 6 6v4h-8Z" fill="#e46f5e"/>
+    <rect x="14" y="6" width="4" height="9" rx="2" fill="#8291bb"/><rect x="30" y="6" width="4" height="9" rx="2" fill="#8291bb"/>
+    <rect x="12.5" y="25" width="6" height="5" rx="1.5" fill="#f9c7bd"/><rect x="21" y="25" width="6" height="5" rx="1.5" fill="#f9c7bd"/><rect x="29.5" y="25" width="6" height="5" rx="1.5" fill="#ffcd4a"/>
+    <rect x="12.5" y="33" width="6" height="5" rx="1.5" fill="#f9c7bd"/><rect x="21" y="33" width="6" height="5" rx="1.5" fill="#efe3e6"/>
+    <path d="M11 14h8" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>`),
+  cupOn: cup(true),
+  cupOff: cup(false),
+  plane: toy(`<path d="M6 22 41 8 33 40l-9-9-6 7v-10Z" fill="#9eb6ea"/><path d="M41 8 18 28l15 12Z" fill="#7f9de6"/><path d="M41 8 18 28v10l6-7Z" fill="#6b86cf"/>
+    <path d="M12 21.5l14-5.5" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.7"/>`),
+  stamp: stamp(false),
+  stampGold: stamp(true),
+  clock: line('M12 21a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15ZM12 9.5v4.2l2.6 1.6M10 2.8h4'),
   pin: '<svg viewBox="0 0 40 48" aria-hidden="true"><path d="M20 46c-1.6-6-15-14-15-26a15 15 0 0 1 30 0c0 12-13.4 20-15 26Z" fill="currentColor" stroke="#fff" stroke-width="2.4"/><circle cx="20" cy="19.5" r="7" fill="#fff"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L18.6 12Z" fill="currentColor"/></svg>',
   // On to a stage (the clear card's next step, after its number): a play mark with soft corners.
