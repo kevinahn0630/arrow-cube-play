@@ -93,6 +93,26 @@ export function saveWeekly(weekly) {
   }
 }
 
+// The latest day the game has seen on this device, 'YYYY-MM-DD' (game.js today()), so
+// a clock turned back does not bring an earlier day back. Anything else kept here is
+// no day and is dropped.
+const DAY_KEY = 'arrowCube.day.v1';
+export function loadLatestDay() {
+  try {
+    const day = localStorage.getItem(DAY_KEY);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : '';
+  } catch {
+    return '';
+  }
+}
+export function saveLatestDay(day) {
+  try {
+    localStorage.setItem(DAY_KEY, day);
+  } catch {
+    // Storage full or blocked: the day then lasts as long as the page.
+  }
+}
+
 // Stars a country has earned (0–3); home gives none.
 export const starsOf = (progress, world) =>
   WORLDS[world].tier ? STAR_AT.filter((n) => clearedCount(progress, world) >= n).length : 0;

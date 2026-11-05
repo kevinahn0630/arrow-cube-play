@@ -63,7 +63,9 @@ export const AD_GAP = 120000;
 // `gift` is the wallet's { n: gifts taken so far, last: the day of the last, 'YYYY-MM-DD' }.
 export const GIFTS = [['coins', 50], ['coins', 100], ['hint', 1], ['coins', 150], ['hint', 1], ['coins', 200], ['eraser', 1]];
 export const giftDay = (gift) => gift.n % GIFTS.length;
-export const giftReady = (gift, today) => gift.last !== today;
+// One a day: the next is ready on a day after the last one's, not on an earlier one (a
+// clock turned back; game.js today() does not go back anyway).
+export const giftReady = (gift, today) => gift.last < today;
 
 // The climb (이벤트 tab), a season a month: every stage cleared in a country scores 10,
 // 10 more for each clear in a row before it (up to 40 more), and 10 for each of three

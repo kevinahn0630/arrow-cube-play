@@ -9,7 +9,7 @@ import { STOPS, STOP_COINS, COURSE_COINS, weekOf, daysLeft, weekName, courseOf, 
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, cutBy, darkCell, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
-import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadPerfect, markPerfect, isPerfect, perfectCount, loadDaily, saveDaily, loadWeekly, saveWeekly, loadWallet, saveWallet } from './progress.js';
+import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadPerfect, markPerfect, isPerfect, perfectCount, loadDaily, saveDaily, loadWeekly, saveWeekly, loadWallet, saveWallet, loadLatestDay, saveLatestDay } from './progress.js';
 import { stageCoins, hardness, perfectBonus, PRICE, PACKS, NO_ADS, AD_EVERY, AD_GAP, GIFTS, giftDay, giftReady, CLIMB_STEP, climbPoints, climbRewards, hintFor, erasable } from './economy.js';
 import { rewarded, interstitial, sinceAd, native } from './ads.js';
 import { canSell, startBilling, buyProduct, priceOf } from './billing.js';
@@ -2354,10 +2354,21 @@ function showTab(tab) {
   if (!calm) $(TABS[tab][1]).animate([{ transform: `translateX(${turn * 56}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
 }
 
-// Today on this device, 'YYYY-MM-DD'.
+// Today, 'YYYY-MM-DD': this device's date, but never a day before the latest one the
+// game has seen here (progress.js loadLatestDay; 2026-11-05, the user's call). There is
+// no server to ask the time, so a clock turned back keeps the day it had reached: the
+// gift, 오늘의 큐브's coins, the week's course and the climb's season do not come round
+// again by turning it back and forth, and a clock turned ahead and back waits there
+// until the real day catches up. The day kept is read each time, as another tab of the
+// web build may have reached a later one.
+let latestDay = '';
 function today() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const kept = loadLatestDay();
+  if (kept > latestDay) latestDay = kept;
+  if (day > latestDay) saveLatestDay((latestDay = day));
+  return latestDay;
 }
 
 // The daily gift (economy.js GIFTS): the box shows a dot while today's is waiting; its
@@ -2407,8 +2418,8 @@ function renderClimb() {
   $('weeklySlot').replaceChildren(weeklyCard());
   newSeason();
   const c = wallet.climb;
-  const [y, m] = c.season.split('-').map(Number);
-  const left = Math.round((new Date(y, m, 1) - new Date(new Date().toDateString())) / 86400000);
+  const m = Number(c.season.slice(5));
+  const left = monthDays(c.season).length - Number(today().slice(8)) + 1;
   $('climbSeason').textContent = `${m}월`;
   $('climbLeft').textContent = `${left}일 남음`;
   $('climbPoints').innerHTML = `${ICON.flag}<span class="n">${digits(c.points)}</span>`;

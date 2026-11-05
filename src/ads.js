@@ -11,9 +11,11 @@ const BETWEEN = 'ca-app-pub-3940256099942544/1033173712';
 
 let loading = null; // the next rewarded ad being loaded: resolves to whether it loaded
 let loadingBetween = null; // the same for the next full-screen ad
-let lastAd = 0; // when the last ad of either kind closed
+// When the last ad of either kind closed, on the page's own clock (performance.now), so
+// a device clock turned back does not hold the next full-screen ad off.
+let lastAd = -Infinity;
 // Time since the last ad closed.
-export const sinceAd = () => Date.now() - lastAd;
+export const sinceAd = () => performance.now() - lastAd;
 function preload() {
   loading = cap.nativePromise('AdMob', 'prepareRewardVideoAd', { adId: UNIT }).then(
     () => true,
@@ -48,7 +50,7 @@ export async function interstitial() {
       if (done) return;
       done = true;
       for (const l of ends) l.remove();
-      lastAd = Date.now();
+      lastAd = performance.now();
       preloadBetween();
       resolve(shown);
     };
@@ -75,7 +77,7 @@ export async function rewarded() {
       if (done) return;
       done = true;
       closed?.remove();
-      lastAd = Date.now();
+      lastAd = performance.now();
       preload();
       resolve(how);
     };
