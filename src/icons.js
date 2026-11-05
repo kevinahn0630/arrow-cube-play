@@ -1,8 +1,9 @@
 // Small icons (SVG strings). The items, what the shop sells, the home screen's tabs, the
-// sound button, the stage's home button, the clear card's ad, a perfect clear's crown and
-// a hard stage's flame are drawn like toys, soft and rounded with a lighter and a darker
-// side and no outline (2026-11-03 user picks, dist/samples/icons.html 안 1 and tabs2.html;
-// 2026-11-04 clear.html 안 B; 2026-11-05 perfect.html and hard.html 안 B); the rest are
+// sound button, the stage's home button, the clear card's ad, a perfect clear's crown,
+// a hard stage's flame, 오늘의 큐브's calendar, cups and stamps and 주간 도전 코스's medal
+// and map are drawn like toys, soft and rounded with a lighter and a darker side and no
+// outline (2026-11-03 user picks, dist/samples/icons.html 안 1 and tabs2.html; 2026-11-04
+// clear.html 안 B; 2026-11-05 perfect.html, hard.html, daily.html and weekly.html); the rest are
 // line icons: round caps, strokes in currentColor. The coin is gold with the game's up arrow.
 const COIN = '<circle cx="10" cy="10" r="9.3" fill="#efb245"/><circle cx="10" cy="10" r="7" fill="#f8cb63" stroke="#fde4a3" stroke-width="1.2"/><path d="M10 13.7V6.8M7.3 9.4 10 6.7l2.7 2.7" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>';
 // A coin with a white rim, so coins lying on each other stay apart.
@@ -48,6 +49,19 @@ const cup = (on) => {
     <path d="M14 11H9a5 5 0 0 0 5 9M34 11h5a5 5 0 0 1-5 9" fill="none" stroke="${c[1]}" stroke-width="3" stroke-linecap="round"/>
     <rect x="21" y="27" width="6" height="7" fill="${c[1]}"/><rect x="15" y="34" width="18" height="6" rx="2.5" fill="${c[0]}"/><path d="M27 34h3.5a2.5 2.5 0 0 1 2.5 2.5v1a2.5 2.5 0 0 1-2.5 2.5H27Z" fill="${c[1]}"/>
     <path d="M18 12v6" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0.7"/><circle cx="24" cy="17" r="2.6" fill="${c[2]}"/>`);
+};
+// 주간 도전 코스's medal: two ribbons and a disc with a star; grey until the week's seven
+// stops are cleared.
+const STAR = Array.from({ length: 10 }, (_, i) => {
+  const a = -Math.PI / 2 + (i * Math.PI) / 5;
+  const r = i % 2 ? 2.4 : 5.6;
+  return `${i ? 'L' : 'M'}${(23.4 + r * Math.cos(a)).toFixed(2)} ${(31 + r * Math.sin(a)).toFixed(2)}`;
+}).join('');
+const medal = (on) => {
+  const [m, d, l] = on ? ['#ffcd4a', '#f0a92e', '#ffe9a0'] : ['#ece5ec', '#d6cbd6', '#f6f2f6'];
+  return `<svg class="toy medal" viewBox="0 0 48 48" aria-hidden="true"><path d="M12.5 3h8.6l7.2 17.5h-8.6Z" fill="${on ? '#f68c7c' : '#e3d8de'}"/><path d="M35.5 3h-8.6l-7.2 17.5h8.6Z" fill="${on ? '#8291bb' : '#d8cfdb'}"/>
+    <circle cx="24" cy="31" r="13.6" fill="${d}"/><circle cx="22.8" cy="30" r="12.6" fill="${m}"/><circle cx="23.4" cy="30.6" r="8.4" fill="${l}"/><path d="${STAR}Z" fill="${d}"/>
+    <path d="M13.8 26.4a10 10 0 0 1 5.4-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="0.75"/></svg>`;
 };
 // A day's stamp on 오늘의 큐브's calendar: a little cube, gold for a perfect clear.
 const stamp = (gold) => {
@@ -161,6 +175,12 @@ export const ICON = {
   cupOff: cup(false),
   plane: toy(`<path d="M6 22 41 8 33 40l-9-9-6 7v-10Z" fill="#9eb6ea"/><path d="M41 8 18 28l15 12Z" fill="#7f9de6"/><path d="M41 8 18 28v10l6-7Z" fill="#6b86cf"/>
     <path d="M12 21.5l14-5.5" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.7"/>`),
+  medal: medal(true),
+  medalOff: medal(false),
+  // A folded map with the course's dotted route and a pin: 주간 도전 코스's page.
+  map: toy(`<path d="M5 12l12-4 14 4 12-4v28l-12 4-14-4-12 4Z" fill="#fff4dc"/><path d="M17 8v28l14 4V12Z" fill="#f6e2b5"/><path d="M5 12l12-4v28L5 40Z" fill="#fdf0d0"/>
+    <path d="M10 33c4-3 8-1.5 12-5.5s8-9.5 13-8.5" fill="none" stroke="#e2786a" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="0.1 4.4"/>
+    <path d="M35 8.5c-3 0-5.2 2.2-5.2 4.9 0 3.7 5.2 8.4 5.2 8.4s5.2-4.7 5.2-8.4c0-2.7-2.2-4.9-5.2-4.9Z" fill="#ec7868"/><circle cx="35" cy="13.4" r="2" fill="#fff"/>`),
   stamp: stamp(false),
   stampGold: stamp(true),
   clock: line('M12 21a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15ZM12 9.5v4.2l2.6 1.6M10 2.8h4'),

@@ -5,10 +5,11 @@ import { SHAPES, surfaceOf, fitSolid, START_VIEW } from './shapes.js';
 import { LANDMARKS } from './landmarks.js';
 import { miniature } from './miniature.js';
 import { DAILY_FROM, LEVEL as DAILY_LEVEL, levelOf, weekday, lookOf as dailyLook, dailyStage, monthDays, monthDone, DAILY_COINS, MONTH_COINS } from './daily.js';
+import { STOPS, STOP_COINS, COURSE_COINS, weekOf, daysLeft, weekName, courseOf, weeklyStage } from './weekly.js';
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, cutBy, darkCell, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
-import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadPerfect, markPerfect, isPerfect, perfectCount, loadDaily, saveDaily, loadWallet, saveWallet } from './progress.js';
+import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadPerfect, markPerfect, isPerfect, perfectCount, loadDaily, saveDaily, loadWeekly, saveWeekly, loadWallet, saveWallet } from './progress.js';
 import { stageCoins, hardness, perfectBonus, PRICE, PACKS, NO_ADS, AD_EVERY, AD_GAP, GIFTS, giftDay, giftReady, CLIMB_STEP, climbPoints, climbRewards, hintFor, erasable } from './economy.js';
 import { rewarded, interstitial, sinceAd, native } from './ads.js';
 import { canSell, startBilling, buyProduct, priceOf } from './billing.js';
@@ -302,8 +303,10 @@ function turnFaces() {
 // ---------- game state
 
 const game = {
-  world: 'home', // a key of WORLDS, 'free' for the generator panel, or 'daily' for 오늘의 큐브
+  world: 'home', // a key of WORLDS, 'free' for the generator panel, 'daily' for 오늘의 큐브 or 'weekly' for 주간 도전 코스
   day: '', // the day of 오늘의 큐브 being played, 'YYYY-MM-DD'
+  course: null, // the stop of 주간 도전 코스 being played: { week, stop (1-7), world }
+  thenStop: 0, // a country's tutorial played before a stop of the course: that stop, which its card goes on to
   t0: 0, // when the puzzle came up (오늘의 큐브's time)
   stage: 1,
   lastWorld: 'home', // where ◀ ▶ lead back to from the generator
@@ -1210,6 +1213,7 @@ function load(params) {
 }
 
 function loadStage(world, stage) {
+  game.thenStop = 0;
   const count = WORLDS[world].stages.length;
   game.world = game.lastWorld = world;
   // Stage 0 is the world's tutorial, which stage 1 opens instead until it is done.
@@ -1736,7 +1740,8 @@ function frame(now) {
 // ---------- UI
 
 // The look the puzzle is in: its world's, the generator's gimmick's, a day's country's.
-const lookNow = () => (game.world === 'free' ? (game.params?.gimmick ?? 'home') : game.world === 'daily' ? dailyLook(game.day) : game.world);
+const lookNow = () =>
+  game.world === 'free' ? (game.params?.gimmick ?? 'home') : game.world === 'daily' ? dailyLook(game.day) : game.world === 'weekly' ? game.course.world : game.world;
 
 function hud() {
   // The world's flag, drawn again only when the world changes.
@@ -1751,6 +1756,9 @@ function hud() {
   } else if (game.world === 'daily') {
     $('world').textContent = '오늘의 큐브';
     $('stageLabel').textContent = `${dayName(game.day)} ▾`;
+  } else if (game.world === 'weekly') {
+    $('world').textContent = '이번 주 코스';
+    $('stageLabel').textContent = `${game.course.stop} / ${STOPS} · ${shortName(game.course.world)} ▾`;
   } else {
     $('world').textContent = shortName(game.world);
     const h = game.stage ? hardness(game.world, game.stage) : 0;
@@ -1775,7 +1783,7 @@ function hud() {
 // ribbon is gold with a `crown` dropping onto it, and its first time a `bonus` stands by
 // the coins; one that missed its crown has a grey cracked one to `retry` there. A card
 // that comes up pops in with its parts rising one after another.
-function showCard({ close, icon, title, flag, hard, celebrate, crown, note, track, souvenir, body, won, wonFrom = 0, doubled, bonus, retry, climb, pay, has, buyCoins, tip, hearts, ad, restart, next, toys }) {
+function showCard({ close, icon, title, flag, hard, celebrate, crown, gold, note, track, souvenir, body, won, wonFrom = 0, doubled, bonus, prize, retry, climb, pay, has, buyCoins, tip, hearts, ad, restart, next, toys }) {
   const card = $('card');
   const fresh = $('clear').hidden || $('clear').classList.contains('closing');
   clearTimeout(closing);
@@ -1794,7 +1802,7 @@ function showCard({ close, icon, title, flag, hard, celebrate, crown, note, trac
     ic.innerHTML = ICON[icon];
     card.append(ic);
   }
-  const h = node('h2', celebrate ? `ribbon${crown ? ' gold' : ''}` : '', title);
+  const h = node('h2', celebrate ? `ribbon${crown || gold ? ' gold' : ''}` : '', title);
   if (flag) {
     const f = node('span', 'flag');
     f.innerHTML = worldIcon(flag);
@@ -1823,7 +1831,7 @@ function showCard({ close, icon, title, flag, hard, celebrate, crown, note, trac
   if (body) card.append(body);
   if (won !== undefined) {
     const r = node('div', 'reward');
-    r.innerHTML = `${ICON.coin}<span>+${wonFrom}</span>${doubled ? '<em class="x2">×2</em>' : ''}${bonus ? `<em class="crown-bonus">${ICON.crown}+${bonus}</em>` : ''}`;
+    r.innerHTML = `${ICON.coin}<span>+${wonFrom}</span>${doubled ? '<em class="x2">×2</em>' : ''}${bonus ? `<em class="crown-bonus">${ICON.crown}+${bonus}</em>` : ''}${prize ? `<em class="cup-bonus">${prize.icon}+${digits(prize.n)}</em>` : ''}`;
     if (retry) {
       const b = button('retry', `${ICON.restart}${ICON.crownLost}`, retry);
       b.setAttribute('aria-label', '다시 해서 왕관 받기');
@@ -1977,6 +1985,7 @@ const showNoHearts = () =>
 function showClear() {
   if (game.tut) return showTutorialDone();
   if (game.world === 'daily') return showDailyClear();
+  if (game.world === 'weekly') return showWeeklyClear();
   const inWorld = game.world !== 'free';
   const w = WORLDS[game.world];
   const last = inWorld && game.stage === w.stages.length;
@@ -2077,13 +2086,15 @@ function climbUp(again) {
 // A tutorial played through: noted on the device, so stage 1 opens from now on. A
 // country's card shows the stage its hearts start at (6).
 function showTutorialDone() {
-  if (!game.autoSolved) markTutorialDone(game.world);
+  // Played before a stop of 주간 도전 코스, it goes on to that stop.
+  const k = game.thenStop;
+  if (!game.autoSolved || k) markTutorialDone(game.world);
   $('guide').hidden = true;
   showCard({
     title: '튜토리얼 완료!',
     celebrate: true,
-    hearts: WORLDS[game.world].stages.findIndex((s) => s.hearts) + 1,
-    next: { text: goTo(1), label: '1스테이지', then: nextStage },
+    hearts: k ? 0 : WORLDS[game.world].stages.findIndex((s) => s.hearts) + 1,
+    next: k ? { text: goTo(k), label: `이번 주 코스 ${k}판`, then: () => playStop(k) } : { text: goTo(1), label: '1스테이지', then: nextStage },
   });
 }
 // A clear card's next step: the stage's number (none for a new puzzle) and a play mark.
@@ -2393,6 +2404,7 @@ function newSeason() {
 // and the climb (climb.js) with the cube in view. Points scored since the tab last showed
 // walk the cube up to where they reach.
 function renderClimb() {
+  $('weeklySlot').replaceChildren(weeklyCard());
   newSeason();
   const c = wallet.climb;
   const [y, m] = c.season.split('-').map(Number);
@@ -2527,10 +2539,16 @@ function renderHome() {
   body.replaceChildren();
   body.append(dailyCard());
   showCollectDot();
+  showClimbDot();
   if (game.playing && game.world !== 'free' && !game.cleared && !game.stuck) {
     const back = node('button', 'continue');
     const text = node('span', 'continue-text');
-    const where = game.world === 'daily' ? `오늘의 큐브 · ${dayName(game.day)}` : `${shortName(game.world)} · ${game.stage ? `스테이지 ${game.stage}` : '튜토리얼'}`;
+    const where =
+      game.world === 'daily'
+        ? `오늘의 큐브 · ${dayName(game.day)}`
+        : game.world === 'weekly'
+          ? `이번 주 코스 · ${game.course.stop} / ${STOPS}`
+          : `${shortName(game.world)} · ${game.stage ? `스테이지 ${game.stage}` : '튜토리얼'}`;
     text.append(node('b', '', '이어서 하기'), node('small', '', where));
     back.append(flagOf(lookNow()), text);
     back.onclick = play;
@@ -2656,6 +2674,8 @@ function renderCollect() {
   body.append(head, pass);
   const cups = cupsRow();
   if (cups) body.append(cups);
+  const medals = medalsRow();
+  if (medals) body.append(medals);
   const cab = node('div', 'cl-cab');
   for (const v of list) {
     const b = node('button', v.got ? '' : 'no');
@@ -2818,6 +2838,226 @@ async function shareDay(day, { perfect, time, misses }) {
   }
 }
 
+// ---------- 주간 도전 코스 (2026-11-05, the user's pick of dist/samples/weekly.html 안 A)
+
+// The courses played (progress.js): by week, the tier its course was drawn for, its stops
+// cleared and whether its medal is won.
+const weekly = loadWeekly();
+const STOP_LIST = Array.from({ length: STOPS }, (_, i) => i + 1);
+// This week's course (weekly.js): drawn for the tiers open when it is first shown, and
+// kept for the week.
+function courseNow() {
+  const week = weekOf(today());
+  let rec = weekly.weeks[week];
+  if (!rec) {
+    rec = weekly.weeks[week] = { tier: [3, 2, 1].find((t) => tierOpen(progress, t)) ?? 1, stops: {} };
+    saveWeekly(weekly);
+  }
+  return { week, rec, worlds: courseOf(week, rec.tier) };
+}
+// The stop to play next: the first not cleared (0 once all seven are).
+const nextStop = (rec) => STOP_LIST.find((k) => !rec.stops[k]) ?? 0;
+// The course's flags, ticked as they are cleared, the next one ringed.
+function courseFlags(worlds, rec) {
+  const next = nextStop(rec);
+  return worlds
+    .map((w, i) => {
+      const k = i + 1;
+      return `<span class="wf ${rec.stops[k] ? 'done' : k === next ? 'now' : 'later'}"><span class="flag">${worldIcon(w)}</span>${rec.stops[k] ? `<i>${ICON.check}</i>` : ''}</span>`;
+    })
+    .join('');
+}
+// The 이벤트 tab shows a dot until it has shown this week's course.
+const showClimbDot = () => $('tabClimb').classList.toggle('new', weekly.seen !== weekOf(today()));
+
+// The 이벤트 tab's card: the week's medal, the days left and the course's flags; ▶ plays
+// the next stop (a check once all seven are cleared), the rest opens the course's page.
+function weeklyCard() {
+  const { week, rec, worlds } = courseNow();
+  const next = nextStop(rec);
+  const done = STOP_LIST.filter((k) => rec.stops[k]).length;
+  const b = node('button', `wc${next ? '' : ' done'}`);
+  b.innerHTML =
+    `${rec.medal ? ICON.medal : ICON.medalOff}` +
+    `<span class="wc-tx"><b>이번 주 코스</b><span class="wc-left">${ICON.clock}${daysLeft(today())}일 남음</span><span class="wf-row">${courseFlags(worlds, rec)}</span></span>` +
+    `<span class="wc-go">${next ? `<b>${next}</b>${ICON.go}` : ICON.check}</span>`;
+  b.setAttribute('aria-label', `이번 주 코스, ${STOPS}판 중 ${done}판 깸`);
+  b.onclick = (e) => (next && e.target.closest('.wc-go') ? playStop(next) : openWeekly());
+  weekly.seen = week;
+  saveWeekly(weekly);
+  showClimbDot();
+  return b;
+}
+
+// The course's page: the trip, what it pays, and ▶ the next stop. A stop cleared can be
+// played again; one after the next waits its turn.
+function openWeekly() {
+  $('weeklyPage').hidden = false;
+  renderWeekly();
+}
+const closeWeekly = () => ($('weeklyPage').hidden = true);
+function renderWeekly() {
+  const { rec, worlds } = courseNow();
+  const next = nextStop(rec);
+  $('weeklyLeft').innerHTML = `${ICON.clock}${daysLeft(today())}일 남음`;
+  const body = $('weeklyBody');
+  body.innerHTML =
+    courseMap(worlds, rec) +
+    `<div class="wk-pay"><span>${ICON.coin}${STOP_COINS}<small>판마다</small></span><span>${ICON.medal}${ICON.coin}${digits(COURSE_COINS)}<small>완주</small></span></div>`;
+  for (const g of body.querySelectorAll('.wk-stop')) {
+    const k = Number(g.dataset.k);
+    if (rec.stops[k] || k === next) g.onclick = () => playStop(k);
+  }
+  if (!next) return;
+  const row = node('div', 'dl-play');
+  const b = node('button');
+  b.innerHTML = `<b>${next}</b>${ICON.go}`;
+  b.setAttribute('aria-label', `${next}판 하기`);
+  b.onclick = () => playStop(next);
+  row.append(b);
+  body.append(row);
+}
+// The trip: islands on the sea and a dotted route through the seven stops, in the accent
+// as far as they are cleared, up to the week's medal. A stop is its flag in a ring: gold
+// with a tick once cleared, the next one ringed in the accent with the paper plane by
+// it, the later ones grey; its number under it.
+const ROUTE = [[66, 436], [176, 452], [282, 396], [236, 304], [110, 270], [64, 174], [170, 116], [282, 64]];
+const PLANE = [[222, 92], [120, 400], [222, 395], [300, 340, true], [172, 252, true], [128, 212, true], [102, 118], [214, 62]];
+function courseMap(worlds, rec) {
+  const next = nextStop(rec);
+  const seg = [];
+  for (let i = 0; i < ROUTE.length - 1; i++) {
+    const [p0, p1, p2, p3] = [ROUTE[i - 1] ?? ROUTE[i], ROUTE[i], ROUTE[i + 1], ROUTE[i + 2] ?? ROUTE[i + 1]];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6].map(Math.round);
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6].map(Math.round);
+    seg.push(`C${c1.join(' ')} ${c2.join(' ')} ${p2.join(' ')}`);
+  }
+  const reached = next ? next - 1 : STOPS;
+  const done = `M${ROUTE[0].join(' ')}${seg.slice(0, reached).join('')}`;
+  const rest = `M${ROUTE[reached].join(' ')}${seg.slice(reached).join('')}`;
+  const nest = (svg, x, y, w, h, extra = '') => svg.replace('<svg', `<svg x="${x}" y="${y}" width="${w}" height="${h}" ${extra}`);
+  const stop = (k, [x, y]) => {
+    const st = rec.stops[k] ? 'done' : k === next ? 'now' : 'later';
+    const ring = { done: '#ffcd4a', now: '#e2786a', later: '#dccfe0' }[st];
+    return (
+      `<g class="wk-stop ${st}" data-k="${k}" transform="translate(${x} ${y})" role="button" aria-label="${k}판 ${shortName(worlds[k - 1])}${rec.stops[k] ? ', 깸' : ''}">` +
+      (st === 'now' ? '<circle r="36" fill="#e2786a" opacity="0.12"/><circle r="30.5" fill="#e2786a" opacity="0.14"/>' : '') +
+      `<circle r="25" cy="3.5" fill="#4a3f5c" opacity="0.1"/><circle r="25" fill="#fff" stroke="${ring}" stroke-width="${st === 'now' ? 4 : 3}"/>` +
+      `<clipPath id="wkFlag${k}"><rect x="-15" y="-10" width="30" height="20" rx="3.5"/></clipPath>` +
+      `<g clip-path="url(#wkFlag${k})"${st === 'later' ? ' opacity="0.45" filter="url(#wkGrey)"' : ''}>${nest(worldIcon(worlds[k - 1]), -15, -10, 30, 20, 'preserveAspectRatio="xMidYMid slice"')}</g>` +
+      (st === 'done'
+        ? '<g transform="translate(18 -18)"><circle r="9" fill="#ffcd4a" stroke="#fff" stroke-width="2.2"/><path d="M-4 .4l2.6 2.6 5-5.2" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></g>'
+        : '') +
+      `<g transform="translate(0 37)"><rect x="-12" y="-9.5" width="24" height="19" rx="9.5" fill="${st === 'now' ? '#e2786a' : '#ffffffe6'}"/><text y="4.6" text-anchor="middle" font-size="12.5" font-weight="800" fill="${st === 'now' ? '#fff' : '#7c6a8c'}">${k}</text></g></g>`
+    );
+  };
+  const [gx, gy] = ROUTE[STOPS];
+  const wave = ([x, y]) => `<path d="M${x} ${y}q5-4.5 10 0t10 0" fill="none" stroke="#bcdcf1" stroke-width="2.2" stroke-linecap="round"/>`;
+  // The paper plane on the way from the next stop to the one after, facing it (its middle,
+  // and whether it flies left); by the medal once the course is done.
+  const [px, py, left] = PLANE[next];
+  const plane = `<g transform="translate(${left ? px + 20 : px - 20} ${py - 20})${left ? ' scale(-1 1)' : ''}">${nest(ICON.plane, 0, 0, 40, 40)}</g>`;
+  return `<svg class="wk-map" viewBox="0 0 343 500" aria-label="이번 주 코스 지도">
+    <defs><linearGradient id="wkSea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8f4fc"/><stop offset="1" stop-color="#d2e8f7"/></linearGradient>
+    <filter id="wkGrey"><feColorMatrix type="saturate" values="0"/></filter></defs>
+    <rect width="343" height="500" rx="24" fill="url(#wkSea)"/>
+    <g fill="#fcf3e3" stroke="#f1e1c6" stroke-width="2">
+      <path d="M-6 384C44 344 124 352 152 400S148 506-6 506Z"/>
+      <path d="M190 236C250 200 352 218 352 296S292 382 230 348S154 264 190 236Z"/>
+      <path d="M-6 92C58 60 156 90 144 150S42 214-6 184Z"/>
+      <path d="M208 14C258-6 352 4 352 52S302 116 250 100S184 34 208 14Z"/>
+    </g>
+    ${[[24, 318], [292, 158], [168, 206], [222, 478], [128, 34]].map(wave).join('')}
+    <path d="${rest}" fill="none" stroke="#c4b5d0" stroke-width="3.4" stroke-linecap="round" stroke-dasharray="0.1 9"/>
+    <path d="${done}" fill="none" stroke="#e2786a" stroke-width="3.8" stroke-linecap="round" stroke-dasharray="0.1 9"/>
+    <circle cx="${gx}" cy="${gy}" r="40" fill="#fff" opacity="0.65"/>
+    ${nest(rec.medal ? ICON.medal : ICON.medalOff, gx - 32, gy - 36, 64, 64)}
+    ${STOP_LIST.map((k) => stop(k, ROUTE[k - 1])).join('')}
+    ${plane}
+  </svg>`;
+}
+
+// Into a stop of this week's course, in its country's look. A country whose tutorial is
+// still to play has it first, and its card goes on to the stop.
+function playStop(k) {
+  const { week, worlds } = courseNow();
+  const world = worlds[k - 1];
+  closeWeekly();
+  closeCard();
+  play();
+  if (!tutorialDone(world)) {
+    loadStage(world, 1);
+    game.thenStop = k;
+    return;
+  }
+  game.thenStop = 0;
+  game.world = 'weekly';
+  game.course = { week, stop: k, world };
+  game.stage = 0;
+  load(weeklyStage(week, k, world));
+}
+
+// A stop cleared: kept (with its crown if perfect), STOP_COINS the first time; the last
+// of the seven cleared wins the week's medal and COURSE_COINS. The card shows the
+// course's flags ticked so far, and its buttons open the course's page and play the
+// next stop; after the medal, 완주! with the medal dropping in, and the 모음 tab.
+function showWeeklyClear() {
+  const { week, stop } = game.course;
+  const rec = (weekly.weeks[week] ??= { tier: 1, stops: {} });
+  const perfect = perfectSoFar();
+  const first = !rec.stops[stop];
+  rec.stops[stop] = { perfect: perfect || !!rec.stops[stop]?.perfect };
+  const won = first ? STOP_COINS : 0;
+  const medal = !rec.medal && STOP_LIST.every((k) => rec.stops[k]) ? COURSE_COINS : 0;
+  if (medal) rec.medal = true;
+  saveWeekly(weekly);
+  const coins = wallet.coins;
+  if (won + medal) earn(won + medal);
+  const next = nextStop(rec);
+  const body = node('div');
+  if (medal) body.innerHTML = `<span class="wk-big">${ICON.medal}</span>`;
+  const row = node('div', 'wf-row');
+  row.innerHTML = courseFlags(courseOf(week, rec.tier), rec);
+  body.append(row);
+  const toPage = () => (closeCard(), openWeekly());
+  showCard({
+    title: medal ? '완주!' : perfect ? '퍼펙트!' : '클리어!',
+    celebrate: true,
+    crown: perfect && !medal,
+    gold: !!medal,
+    body,
+    won: won || undefined,
+    prize: medal ? { icon: ICON.medal, n: medal } : null,
+    toys: medal
+      ? [
+          { cls: 'cab', html: ICON.cabinet, label: '모음', then: () => (closeCard(), showHome(), showTab('collect')) },
+          { cls: 'primary next', html: ICON.check, label: '코스 지도', then: toPage },
+        ]
+      : [
+          { cls: 'map', html: ICON.map, label: '코스 지도', then: toPage },
+          next ? { cls: 'primary next', html: goTo(next), label: `${next}판`, then: () => playStop(next) } : { cls: 'primary next', html: ICON.check, label: '코스 지도', then: toPage },
+        ],
+  });
+  if (wallet.coins > coins) setTimeout(() => payOut(coins, $('card').querySelector('.reward') ?? $('card')), 520);
+}
+
+// The medals in the 모음 tab: each week played, gold once all its stops were cleared, and
+// this week's still to win. None before a stop is cleared.
+function medalsRow() {
+  const now = weekOf(today());
+  const played = (w) => Object.keys(weekly.weeks[w]?.stops ?? {}).length;
+  const weeks = Object.keys(weekly.weeks).map(Number).filter((w) => w !== now && played(w)).sort((a, b) => a - b);
+  if (!weeks.length && !played(now)) return null;
+  const row = node('div', 'cl-cups cl-medals');
+  for (const w of [...weeks, now]) {
+    const won = weekly.weeks[w]?.medal;
+    const f = node('figure');
+    f.innerHTML = `${won ? ICON.medal : ICON.medalOff}<figcaption>${weekName(w)}${won ? '' : ` ${played(w)}/${STOPS}`}</figcaption>`;
+    row.append(f);
+  }
+  return row;
+}
+
 // A world's page (2026-11-04, the user's pick of dist/samples/world.html 안 B), from the
 // home screen's orbs or a stage's title; from the generator, the home screen. Its sky and
 // landmarks (scenery.js) stay behind while its stages, round buttons in its colour once
@@ -2828,6 +3068,7 @@ let worldOn = '';
 function openWorld(key = game.world) {
   if (key === 'free') return showHome();
   if (key === 'daily') return openDaily();
+  if (key === 'weekly') return openWeekly();
   $('worldPage').hidden = false;
   showWorld(key);
 }
@@ -3002,6 +3243,7 @@ $('guideNext').onclick = () => {
 };
 $('guideSkip').onclick = () => {
   markTutorialDone(game.world);
+  if (game.thenStop) return playStop(game.thenStop);
   loadStage(game.world, 1);
 };
 $('solve').onclick = autoSolve;
@@ -3044,6 +3286,16 @@ $('dailyBack').onclick = () => {
   // From a day just cleared (its card's calendar) back is the home screen; from a day
   // being played, back into it.
   if (game.world === 'daily' && game.screen === 'play' && game.cleared) showHome();
+};
+$('weeklyBack').innerHTML = ICON.back;
+$('weeklyBack').onclick = () => {
+  closeWeekly();
+  // From a stop just cleared (its card's map) back is the 이벤트 tab; from a stop being
+  // played, back into it.
+  if (game.world === 'weekly' && game.screen === 'play' && game.cleared) {
+    showHome();
+    showTab('climb');
+  }
 };
 $('giftBtn').onclick = openGift;
 // Purchases: paid out as they come, and Play's prices into the shop once it has them.
@@ -3109,7 +3361,7 @@ addEventListener('resize', resize);
 resize();
 
 // Handle for poking at the game from the browser console.
-window.arrowCube = { game, wallet, perfects, pick, tap, camera, box, raycaster, screenOf, world };
+window.arrowCube = { game, wallet, perfects, weekly, pick, tap, camera, box, raycaster, screenOf, world };
 
 loadStage('home', 1);
 requestAnimationFrame(frame);

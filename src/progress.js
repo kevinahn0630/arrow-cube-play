@@ -73,6 +73,26 @@ export function saveDaily(daily) {
   }
 }
 
+// 주간 도전 코스 (weekly.js): by week number, the tier its course was drawn for (fixed
+// once it is first shown), its stops cleared (1-7 → { perfect }) and whether its medal
+// is won; and the week whose course the 이벤트 tab last showed (its dot until then).
+const WEEKLY_KEY = 'arrowCube.weekly.v1';
+export function loadWeekly() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(WEEKLY_KEY) ?? '{}');
+    return { weeks: raw.weeks ?? {}, seen: raw.seen ?? null };
+  } catch {
+    return { weeks: {}, seen: null };
+  }
+}
+export function saveWeekly(weekly) {
+  try {
+    localStorage.setItem(WEEKLY_KEY, JSON.stringify(weekly));
+  } catch {
+    // Storage full or blocked: the course then lasts as long as the page.
+  }
+}
+
 // Stars a country has earned (0–3); home gives none.
 export const starsOf = (progress, world) =>
   WORLDS[world].tier ? STAR_AT.filter((n) => clearedCount(progress, world) >= n).length : 0;
