@@ -71,11 +71,21 @@
   .flag { display: block; flex: none; aspect-ratio: 3 / 2; border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px #4a3f5c22; }
   .flag svg { display: block; width: 100%; height: 100%; }
   .count { padding: 6px 14px; font-size: 22px; font-weight: 800; color: var(--accent); white-space: nowrap; }
-  /* The hearts hang under the arrow count, so on a phone the top row keeps room for the world's name. */
+  /* The hearts hang under the arrow count, so on a phone the top row keeps room for the world's name;
+     the crown (a perfect clear still to win, 2026-11-05) hangs beside them, and once cracked starts the stage over. */
   .hud-right { position: relative; }
-  .hearts { position: absolute; top: calc(100% + 8px); right: 0; padding: 6px 12px; font-size: 20px; line-height: 1.35; color: #e2786a; letter-spacing: 2px; white-space: nowrap; }
+  .hud-under { position: absolute; top: calc(100% + 8px); right: 0; display: flex; align-items: center; gap: 8px; }
+  .hearts { padding: 6px 12px; font-size: 20px; line-height: 1.35; color: #e2786a; letter-spacing: 2px; white-space: nowrap; }
   .hearts i { font-style: normal; color: var(--muted); opacity: 0.4; }
   .hearts.lost { animation: shake 0.4s; }
+  .crown-pill { position: relative; width: 44px; height: 44px; padding: 0; display: grid; place-items: center; pointer-events: auto; }
+  .crown-pill[hidden] { display: none; }
+  .crown-pill .crown { width: 31px; height: 31px; }
+  .crown-pill.lost .crown { width: 29px; height: 29px; }
+  .crown-pill .re { position: absolute; right: -5px; bottom: -5px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px #4a3f5c33; color: var(--accent); }
+  .crown-pill .re svg { width: 15px; height: 15px; }
+  .crown-pill .re svg path { stroke-width: 3; }
+  .crown-pill.cracked { animation: shake 0.4s; }
   /* The build players get (src/build.js): no ◀ 다시 ▶, auto-solve, generator or zoom buttons. */
   .release .bar, .release #panel, .release #zoomIn, .release #zoomOut, .release #resetView { display: none !important; }
   @keyframes shake {
@@ -391,6 +401,21 @@
   .card .track .star-new { z-index: 1; filter: drop-shadow(0 0 4px #ffc93f) drop-shadow(0 0 2px #fff); animation: star-pop 0.6s 1s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
   @keyframes star-pop { 0% { transform: scale(0.2) rotate(-40deg); opacity: 0; } 70% { transform: scale(1.3); opacity: 1; } }
   .card .reward .x2 { margin-left: 2px; padding: 3px 9px; border-radius: 999px; background: #fff4dc; color: #c98a12; font-size: 15px; font-style: normal; font-weight: 800; }
+  /* A perfect clear (2026-11-05, the user's pick of dist/samples/perfect.html 안 B): a gold
+     ribbon with a crown dropping onto it, and the first time the bonus by the coins; a
+     clear that missed it, a grey cracked crown to try the stage again. */
+  .card h2.ribbon.gold { background: linear-gradient(180deg, #ffd768, #f5b13a); box-shadow: 0 6px 14px #f5b13a55; text-shadow: 0 2px 0 #d4901f; }
+  .card h2.ribbon.gold::before, .card h2.ribbon.gold::after { background: #d4901f; }
+  .card.cheer h2.ribbon.gold { margin-top: 18px; }
+  .card h2.ribbon .crown-top { position: absolute; left: 50%; top: -31px; width: 46px; height: 46px; margin-left: -23px; transform: rotate(-8deg); filter: drop-shadow(0 3px 2px #c9625540); animation: crown-drop 0.6s 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .card h2.ribbon .crown-top svg { display: block; width: 46px; height: 46px; }
+  @keyframes crown-drop { 0% { transform: translateY(-26px) scale(0.4) rotate(-30deg); opacity: 0; } 70% { transform: translateY(2px) scale(1.15) rotate(-6deg); opacity: 1; } 100% { transform: rotate(-8deg); } }
+  .card .reward .crown-bonus { display: flex; align-items: center; gap: 1px; margin-left: 2px; padding: 2px 10px 2px 4px; border-radius: 999px; background: #fff4dc; color: #c98a12; font-size: 16px; font-style: normal; font-weight: 800; }
+  .card .reward .crown-bonus svg { width: 26px; height: 26px; }
+  .card .reward .retry { display: flex; align-items: center; gap: 1px; height: 40px; margin-left: 4px; padding: 0 9px 0 10px; border: 0; border-radius: 999px; background: #fff; box-shadow: inset 0 0 0 2px #f1e2e6, 0 3px 0 #ead9d5; color: var(--accent); }
+  .card .reward .retry > svg:first-child { width: 21px; height: 21px; }
+  .card .reward .retry > svg:first-child path { stroke-width: 2.8; }
+  .card .reward .retry .crown { width: 28px; height: 28px; }
   .card .climb-won small svg { width: 15px; height: 15px; }
   .card.cheer .tip { margin: 6px auto 0; }
   .card .hearts-from { display: flex; align-items: center; justify-content: center; gap: 6px; width: fit-content; margin: -2px auto 18px; padding: 7px 15px 7px 12px; border-radius: 999px; background: #fde6e2; color: var(--accent); font-size: 14px; font-weight: 800; }
@@ -437,6 +462,13 @@
   .node.here.done { color: #fff; background: linear-gradient(180deg, var(--acc-l), var(--acc)); text-shadow: 0 1px 0 var(--acc-d); }
   .node .badge { position: absolute; top: -10px; right: -10px; width: 26px; height: 26px; }
   .node .badge svg { display: block; width: 26px; height: 26px; }
+  /* A stage cleared perfectly is gold with a crown on top; the page's line counts the crowns. */
+  .node.done.perfect { background: linear-gradient(180deg, #ffe07a, #f6b73c); box-shadow: 0 5px 0 #d9952c, 0 8px 14px #4a3f5c2e; text-shadow: 0 1px 0 #c98a22; }
+  .node.here.done.perfect { box-shadow: 0 0 0 4px #f6b73c, 0 6px 0 4px #d9952c, 0 0 26px #ffcf4acc; }
+  .node .cap { position: absolute; top: -21px; left: 50%; width: 30px; height: 30px; margin-left: -17px; transform: rotate(-8deg); pointer-events: none; }
+  .node .cap svg { display: block; width: 30px; height: 30px; }
+  .wp-title small .crowns { display: inline-flex; align-items: center; gap: 1px; color: #c98a12; }
+  .wp-title small .crowns svg { width: 16px; height: 16px; margin-top: -2px; }
   .tut-at { position: absolute; transform: translate(-50%, -50%); }
   .tut-btn { display: flex; align-items: center; gap: 6px; height: 50px; padding: 0 18px 0 16px; border: 0; border-radius: 25px; font-size: 15px; font-weight: 800; color: #fff; background: linear-gradient(180deg, var(--acc-l), var(--acc)); box-shadow: 0 5px 0 var(--acc-d), 0 8px 14px #4a3f5c2e; text-shadow: 0 1px 0 var(--acc-d); white-space: nowrap; }
   .tut-btn > svg { width: 18px; height: 18px; }
@@ -479,6 +511,13 @@
   .orb-name { display: block; margin-top: 6px; font-size: 13px; font-weight: 500; letter-spacing: 1px; white-space: nowrap; }
   .orb-foot { display: block; margin-top: 1px; font-size: 10px; color: #a091a6; white-space: nowrap; }
   .orb-foot .stars { font-size: 10px; letter-spacing: 0; }
+  /* A world whose stages are all cleared perfectly: a gold ring and glow, a crown on top. */
+  .world-orb.perfect .orb-ring .orb-done { stroke: #f6b73c; stroke-width: 4; }
+  .world-orb.perfect .orb-ball { box-shadow: 0 0 0 3px #ffd66a, 0 0 26px #ffcf4acc, 0 10px 20px #b48aa040; }
+  .world-orb .orb-top { position: absolute; top: -17px; left: 50%; z-index: 2; width: 36px; height: 36px; margin-left: -18px; transform: rotate(-10deg); filter: drop-shadow(0 2px 2px #b48aa055); pointer-events: none; }
+  .world-orb .orb-top svg { display: block; width: 36px; height: 36px; }
+  .orb-foot .crowns { display: inline-flex; align-items: center; gap: 1px; vertical-align: -1px; color: #c98a12; font-weight: 700; }
+  .orb-foot .crowns svg { width: 12px; height: 12px; }
 
   /* Motion (2026-11-04, fx.js): the layer effects fly in, cards popping up and their parts
      rising in turn, the clear card's ribbon and sun rays, gleams on the big buttons, numbers
@@ -527,7 +566,7 @@
   .stop.pop .ring { animation: bump 0.5s ease-out; }
   @keyframes tick-pop { from { transform: scale(0); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) {
-    .world-orb .orb-ball, .world-orb .orb-ring, .gift-box.ready svg, .card .primary::after, .rays, .card .track .star-new { animation: none; }
+    .world-orb .orb-ball, .world-orb .orb-ring, .gift-box.ready svg, .card .primary::after, .rays, .card .track .star-new, .card h2.ribbon .crown-top, .crown-pill.cracked { animation: none; }
   }
 </style>
 <script type="importmap">
@@ -561,8 +600,11 @@
       <button class="pill title" id="worldBtn" title="스테이지 선택"><span class="flag" id="worldFlag"></span><span class="title-text"><b id="world">집 안</b><small id="stageLabel"></small></span></button>
     </div>
     <div class="hud-right">
-      <div class="pill hearts" id="hearts" hidden></div>
       <div class="pill count">↑ <span id="remain">0</span></div>
+      <div class="hud-under">
+        <button class="pill crown-pill" id="crownBtn" hidden></button>
+        <div class="pill hearts" id="hearts" hidden></div>
+      </div>
     </div>
   </div>
 

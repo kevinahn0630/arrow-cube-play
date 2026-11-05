@@ -6,8 +6,8 @@ import { LANDMARKS } from './landmarks.js';
 import { newState, blockAt, group, canExit, remove, solve, ownerAt, pose, caughtBy, cutBy, darkCell, charge, clocked, deadEnd } from './rules.js';
 import { evaluate } from './difficulty.js';
 import { WORLDS, preset, STAR_AT, TIER_STARS } from './stages.js';
-import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadWallet, saveWallet } from './progress.js';
-import { coinsFor, PRICE, PACKS, NO_ADS, AD_EVERY, AD_GAP, GIFTS, giftDay, giftReady, CLIMB_STEP, climbPoints, climbRewards, hintFor, erasable } from './economy.js';
+import { loadProgress, markCleared, isCleared, clearedCount, starsOf, totalStars, tierOpen, tutorialDone, markTutorialDone, loadPerfect, markPerfect, isPerfect, perfectCount, loadWallet, saveWallet } from './progress.js';
+import { coinsFor, perfectBonus, PRICE, PACKS, NO_ADS, AD_EVERY, AD_GAP, GIFTS, giftDay, giftReady, CLIMB_STEP, climbPoints, climbRewards, hintFor, erasable } from './economy.js';
 import { rewarded, interstitial, sinceAd, native } from './ads.js';
 import { canSell, startBilling, buyProduct, priceOf } from './billing.js';
 import { ICON, rewardIcon } from './icons.js';
@@ -333,6 +333,8 @@ const game = {
   counts: false, // a country stage (not a tutorial): it scores up the climb and counts toward the next full-screen ad
   moved: false, // an arrow has been tapped or erased: giving the stage up now breaks the clears in a row
   misses: 0, // wrong taps (the hearts lost, where a stage has them)
+  helped: false, // a hint or the eraser was used: the stage can no longer be cleared perfectly
+  retrying: false, // the stage is being started over for its crown: the clears in a row go on
   adWatched: false, // the clear card's ad was watched: no full-screen ad on the way to the next stage
 };
 
@@ -1116,14 +1118,16 @@ function refreshFree() {
 
 function load(params) {
   clearTimeout(game.solveTimer);
-  // A country stage given up or started over after a move breaks the clears in a row.
-  if (game.counts && game.moved && !game.cleared && wallet.climb.row) {
+  // A country stage given up or started over after a move breaks the clears in a row,
+  // unless it is started over to try for its crown (retry).
+  if (game.counts && game.moved && !game.cleared && wallet.climb.row && !game.retrying) {
     wallet.climb.row = 0;
     saveWallet(wallet);
   }
   game.counts = game.world !== 'free' && WORLDS[game.world].tier > 0;
   game.moved = false;
   game.misses = 0;
+  game.helped = false;
   game.adWatched = false;
   for (const ar of game.arrows) {
     if (ar.state === 'gone') continue;
@@ -1194,6 +1198,7 @@ function load(params) {
   redrawAll();
   hud();
   drawHearts();
+  drawCrown();
   showWallet();
   $('clear').hidden = true;
 }
@@ -1212,6 +1217,42 @@ function loadStage(world, stage) {
 
 // Starts the stage on now over; a tutorial from its first step.
 const restart = () => (game.tut ? loadTutorial(game.world) : load(game.params));
+
+// A perfect clear (2026-11-05, the user's pick of dist/samples/perfect.html 안 B): a
+// world's stage cleared with no blocked arrow tapped (no heart lost), no hint and no
+// eraser wins it a crown (progress.js), and the first time half its first clear's coins
+// more (economy.js perfectBonus). The crown in the top bar shows whether this one still
+// can be: a mistake, a hint or the eraser cracks it, and then it starts the stage over.
+const crownable = () => game.world !== 'free' && !game.tut;
+const perfectSoFar = () => crownable() && !game.misses && !game.helped && !game.autoSolved;
+// Something that may spoil a perfect clear happens: the crown cracks if it did.
+function spoil(change) {
+  const was = perfectSoFar();
+  change();
+  if (was && !perfectSoFar()) drawCrown(true);
+}
+function drawCrown(cracked = false) {
+  const b = $('crownBtn');
+  b.hidden = !crownable();
+  if (b.hidden) return;
+  const lost = !perfectSoFar();
+  b.classList.toggle('lost', lost);
+  b.innerHTML = lost ? `${ICON.crownLost}<i class="re">${ICON.restart}</i>` : ICON.crown;
+  b.setAttribute('aria-label', lost ? '처음부터 다시' : '실수 없이 깨면 왕관');
+  if (cracked) replay(b, 'cracked');
+}
+// Starts the stage over for its crown, from the cracked crown or the clear card; the
+// climb's clears in a row go on.
+function retry() {
+  closeCard();
+  game.retrying = true;
+  load(game.params);
+  game.retrying = false;
+}
+$('crownBtn').onclick = () => {
+  if (perfectSoFar()) say('실수 없이 깨면 왕관');
+  else if (playingStage()) retry();
+};
 
 function loadCustom() {
   game.world = 'free';
@@ -1278,7 +1319,7 @@ function tap(ar) {
     a.redUntil = now + 1400;
   }
   playBump();
-  game.misses++;
+  spoil(() => game.misses++);
   loseHeart();
   tutDid('bump', ar.index);
 }
@@ -1471,7 +1512,7 @@ function autoSolve() {
   // A clocked stage can only be finished the generator's way; if the player has
   // strayed from it, start over first.
   if (clocked(game.puz) && !solve(game.puz, game.state, living()).solvable) load(game.params);
-  game.autoSolved = true;
+  spoil(() => (game.autoSolved = true));
   const alive = living();
   const steps = [];
   for (const l of solve(game.puz, game.state, alive).layers) {
@@ -1501,6 +1542,7 @@ function loadTutorial(world) {
   camera.up.set(0, 1, 0);
   game.tut = { steps: TUTORIALS[world].steps, k: 0, targets: [], focus: -1, wait: false };
   $('guide').style.setProperty('--accent', themeOf(world).accent);
+  drawCrown();
   showWallet();
   tutStep(0);
 }
@@ -1704,9 +1746,11 @@ function hud() {
 // they can (2026-11-04, the user's pick of dist/samples/clear.html 안 B).
 // A clear (`celebrate`) puts the title on a ribbon with sun rays turning behind the card
 // and confetti bursting from it, the coins count up from `wonFrom` (fx.js), and its
-// buttons are toys side by side: the ad's ×2 and the next stage. A card that comes up
-// pops in with its parts rising one after another.
-function showCard({ close, icon, title, flag, celebrate, note, track, body, won, wonFrom = 0, doubled, climb, pay, has, buyCoins, tip, hearts, ad, restart, next }) {
+// buttons are toys side by side: the ad's ×2 and the next stage. A perfect clear's
+// ribbon is gold with a `crown` dropping onto it, and its first time a `bonus` stands by
+// the coins; one that missed its crown has a grey cracked one to `retry` there. A card
+// that comes up pops in with its parts rising one after another.
+function showCard({ close, icon, title, flag, celebrate, crown, note, track, body, won, wonFrom = 0, doubled, bonus, retry, climb, pay, has, buyCoins, tip, hearts, ad, restart, next }) {
   const card = $('card');
   const fresh = $('clear').hidden || $('clear').classList.contains('closing');
   clearTimeout(closing);
@@ -1725,7 +1769,7 @@ function showCard({ close, icon, title, flag, celebrate, note, track, body, won,
     ic.innerHTML = ICON[icon];
     card.append(ic);
   }
-  const h = node('h2', celebrate ? 'ribbon' : '', title);
+  const h = node('h2', celebrate ? `ribbon${crown ? ' gold' : ''}` : '', title);
   if (flag) {
     const f = node('span', 'flag');
     f.innerHTML = worldIcon(flag);
@@ -1734,13 +1778,23 @@ function showCard({ close, icon, title, flag, celebrate, note, track, body, won,
     h.classList.add('flagged');
     h.prepend(f);
   }
+  if (crown) {
+    const c = node('span', 'crown-top');
+    c.innerHTML = ICON.crown;
+    h.append(c);
+  }
   card.append(h);
   if (note) card.append(node('p', 'clear-stars', note));
   if (track) card.append(trackOf(track, fresh));
   if (body) card.append(body);
   if (won !== undefined) {
     const r = node('div', 'reward');
-    r.innerHTML = `${ICON.coin}<span>+${wonFrom}</span>${doubled ? '<em class="x2">×2</em>' : ''}`;
+    r.innerHTML = `${ICON.coin}<span>+${wonFrom}</span>${doubled ? '<em class="x2">×2</em>' : ''}${bonus ? `<em class="crown-bonus">${ICON.crown}+${bonus}</em>` : ''}`;
+    if (retry) {
+      const b = button('retry', `${ICON.restart}${ICON.crownLost}`, retry);
+      b.setAttribute('aria-label', '다시 해서 왕관 받기');
+      r.append(b);
+    }
     card.append(r);
     setTimeout(() => countUp(r.querySelector('span'), wonFrom, won, 700, (n) => `+${n}`), fresh ? 380 : 0);
   }
@@ -1876,7 +1930,10 @@ const showNoHearts = () =>
 // card's bar shows where the world stands, with a star just earned popping in (the coins
 // the player has are not on it: the bar under the cube shows them, and the coins fly
 // there). The last stage's ribbon carries the world's flag. That a stage cleared again
-// pays a fifth is told once: on 집 안's first stage, or the first time it happens.
+// pays a fifth is told once: on 집 안's first stage, or the first time it happens. A
+// perfect clear wins the stage its crown: the ribbon turns gold and says 퍼펙트! (the
+// last stage keeps its flag and 완료!), and the first time pays the bonus too, which
+// the ad doubles with the rest; a stage still without its crown offers a retry.
 function showClear() {
   if (game.tut) return showTutorialDone();
   const inWorld = game.world !== 'free';
@@ -1898,21 +1955,28 @@ function showClear() {
     markCleared(progress, game.world, game.stage);
     parts.track = { cleared: clearedCount(progress, game.world), was, total: w.stages.length, stars: w.tier > 0 };
     const won = coinsFor(game.world, game.stage, again);
+    let bonus = 0;
+    if (perfectSoFar()) {
+      if (markPerfect(perfects, game.world, game.stage)) bonus = perfectBonus(game.world, game.stage);
+      parts.crown = true;
+      if (!last) parts.title = '퍼펙트!';
+    } else if (!isPerfect(perfects, game.world, game.stage)) parts.retry = retry;
     if (!wallet.told && (again || (game.world === 'home' && game.stage === 1))) {
       wallet.told = true;
       parts.tip = '다시 깨면 코인 1/5';
     }
-    earn(won);
+    earn(won + bonus);
     if (game.counts) parts.climb = climbUp(again);
     parts.won = won;
+    parts.bonus = bonus;
     parts.ad = {
       text: '×2',
       label: '광고 보고 코인 두 배',
       then: () => {
         game.adWatched = true;
         const before = wallet.coins;
-        earn(won);
-        showCard({ ...parts, won: 2 * won, wonFrom: won, doubled: true, ad: null });
+        earn(won + bonus);
+        showCard({ ...parts, won: 2 * won, wonFrom: won, bonus: 2 * bonus, doubled: true, ad: null });
         payOut(before, $('card').querySelector('.reward'));
       },
     };
@@ -2086,6 +2150,7 @@ function lightHint() {
     return false;
   }
   game.hint = i;
+  spoil(() => (game.helped = true));
   turnTo(pose(game.puz, game.state, i).cells.at(-1));
   return true;
 }
@@ -2115,6 +2180,7 @@ function erase(ar) {
   wallet.eraser--;
   saveWallet(wallet);
   game.moved = true;
+  spoil(() => (game.helped = true));
   const at = tapSpot(ar.cells.at(-1));
   if (at) sparkle(at, 9);
   remove(puz, state, ar.index);
@@ -2361,6 +2427,7 @@ function shake(el) {
 // built. A world opens its stage menu, a sheet over the home screen or the game.
 // Hovering a stage shows its expected wrong taps, for tuning.
 const progress = loadProgress();
+const perfects = loadPerfect(); // the stages wearing a crown
 const COUNTRIES = Object.keys(WORLDS).filter((w) => WORLDS[w].tier);
 const starText = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
 const GROUPS = ['입문', '쉬움', '보통', '어려움']; // by tier
@@ -2437,12 +2504,14 @@ function renderHome() {
 }
 
 // A world as a glowing orb: a window onto the bottom of its picture (scenery.js) under
-// its sky, a ring that fills with the stages cleared, and its name and stars below.
+// its sky, a ring that fills with the stages cleared, and its name and stars below. A
+// world whose every stage wears a crown glows gold with a crown on top.
 function worldOrb(key, locked = false) {
   const w = WORLDS[key];
   const n = w.stages.length;
   const done = clearedCount(progress, key);
-  const orb = node('button', `world-orb${game.playing && key === game.world ? ' current' : ''}${locked ? ' locked' : ''}`);
+  const allPerfect = perfectCount(perfects, key) === n;
+  const orb = node('button', `world-orb${game.playing && key === game.world ? ' current' : ''}${locked ? ' locked' : ''}${allPerfect ? ' perfect' : ''}`);
   orb.style.setProperty('--bob', `${(-Math.random() * 4.4).toFixed(2)}s`); // the orbs bob out of step
   const ball = node('span', 'orb-ball');
   ball.style.background = themeOf(key).background;
@@ -2453,8 +2522,14 @@ function worldOrb(key, locked = false) {
   const foot = node('span', 'orb-foot');
   if (w.tier) foot.append(node('span', 'stars', locked && !done ? '🔒' : starText(starsOf(progress, key))), ' ');
   foot.append(`${done}/${n}`);
+  if (allPerfect) {
+    const top = node('span', 'orb-top');
+    top.innerHTML = ICON.crown;
+    orb.append(top);
+    foot.insertAdjacentHTML('beforeend', ` <span class="crowns">${ICON.crown}${n}</span>`);
+  }
   orb.append(node('b', 'orb-name', shortName(key)), foot);
-  orb.setAttribute('aria-label', `${shortName(key)}, ${done}/${n} 클리어${w.tier ? `, 별 ${starsOf(progress, key)}개` : ''}${locked ? ', 잠김' : ''}`);
+  orb.setAttribute('aria-label', `${shortName(key)}, ${done}/${n} 클리어${w.tier ? `, 별 ${starsOf(progress, key)}개` : ''}${allPerfect ? ', 모두 퍼펙트' : ''}${locked ? ', 잠김' : ''}`);
   orb.onclick = () => openWorld(key);
   return orb;
 }
@@ -2493,7 +2568,7 @@ function layoutOrbs() {
 // A world's page (2026-11-04, the user's pick of dist/samples/world.html 안 B), from the
 // home screen's orbs or a stage's title; from the generator, the home screen. Its sky and
 // landmarks (scenery.js) stay behind while its stages, round buttons in its colour once
-// cleared, wind up a path from the tutorial; a pin stands on the stage to play (the one
+// cleared (gold with a crown once cleared perfectly), wind up a path from the tutorial; a pin stands on the stage to play (the one
 // being played, else the first not cleared) and the view starts there. Over it: the way
 // back, the flag and name, the stars, and a bar with a star at each stage that earns one.
 let worldOn = '';
@@ -2519,7 +2594,9 @@ function showWorld(key) {
   $('worldPageFlag').innerHTML = worldIcon(key);
   $('worldPageName').textContent = shortName(key);
   const done = clearedCount(progress, key);
-  $('worldPageSub').innerHTML = `${w.tier ? `<span class="stars">${starText(starsOf(progress, key))}</span> · ` : ''}${done} / ${n}`;
+  const crowns = perfectCount(perfects, key);
+  $('worldPageSub').innerHTML =
+    `${w.tier ? `<span class="stars">${starText(starsOf(progress, key))}</span> · ` : ''}${done} / ${n}` + (crowns ? ` · <span class="crowns">${ICON.crown}${crowns}</span>` : '');
   $('worldBar').innerHTML =
     `<i style="width:${(100 * done) / n}%"></i>` + (w.tier ? STAR_AT.map((s) => `<span class="star" style="left:${(100 * s) / n}%">${done >= s ? ICON.starOn : ICON.starOff}</span>`).join('') : '');
 
@@ -2557,10 +2634,13 @@ function showWorld(key) {
   path.append(tutAt);
   for (let s = 1; s <= n; s++) {
     const cleared = isCleared(progress, key, s);
-    const b = node('button', `node${cleared ? ' done' : ''}${s === here ? ' here' : ''}`, s);
+    // A stage cleared perfectly is gold with a crown on top.
+    const perfect = cleared && isPerfect(perfects, key, s);
+    const b = node('button', `node${cleared ? ' done' : ''}${perfect ? ' perfect' : ''}${s === here ? ' here' : ''}`, s);
+    if (perfect) b.insertAdjacentHTML('beforeend', `<span class="cap">${ICON.crown}</span>`);
     if (w.tier && STAR_AT.includes(s)) b.insertAdjacentHTML('beforeend', `<span class="badge">${cleared ? ICON.starOn : ICON.starOff}</span>`);
     if (DEV) b.title = `예상 오답 ${STAGE_SEEDS[key][s - 1].wrong}회`;
-    b.setAttribute('aria-label', `스테이지 ${s}${cleared ? ', 클리어' : ''}${game.playing && key === game.world && s === game.stage ? ', 지금 스테이지' : ''}`);
+    b.setAttribute('aria-label', `스테이지 ${s}${cleared ? ', 클리어' : ''}${perfect ? ', 퍼펙트' : ''}${game.playing && key === game.world && s === game.stage ? ', 지금 스테이지' : ''}`);
     b.onclick = go(s);
     place(b, at[s]);
     path.append(b);
@@ -2766,7 +2846,7 @@ addEventListener('resize', resize);
 resize();
 
 // Handle for poking at the game from the browser console.
-window.arrowCube = { game, wallet, pick, tap, camera, box, raycaster, screenOf, world };
+window.arrowCube = { game, wallet, perfects, pick, tap, camera, box, raycaster, screenOf, world };
 
 loadStage('home', 1);
 requestAnimationFrame(frame);

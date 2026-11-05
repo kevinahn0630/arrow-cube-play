@@ -6,35 +6,52 @@ import { WORLDS, STAR_AT, TIER_STARS } from './stages.js';
 import { START } from './economy.js';
 
 const KEY = 'arrowCube.progress.v1';
+const PERFECT_KEY = 'arrowCube.perfect.v1';
 
-// world → Set of cleared stage numbers.
-export function loadProgress() {
+// world → Set of stage numbers, as kept under a storage key.
+function loadSets(key) {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+    const raw = JSON.parse(localStorage.getItem(key) ?? '{}');
     return Object.fromEntries(Object.entries(raw).filter(([w]) => WORLDS[w]).map(([w, list]) => [w, new Set(list)]));
   } catch {
     return {};
   }
 }
-
-function save(progress) {
+function saveSets(key, sets) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(Object.entries(progress).map(([w, s]) => [w, [...s]]))));
+    localStorage.setItem(key, JSON.stringify(Object.fromEntries(Object.entries(sets).map(([w, s]) => [w, [...s]]))));
   } catch {
-    // Storage full or blocked: progress then lasts as long as the page.
+    // Storage full or blocked: it then lasts as long as the page.
   }
 }
+
+// world → Set of cleared stage numbers.
+export const loadProgress = () => loadSets(KEY);
 
 // Records a stage as cleared.
 export function markCleared(progress, world, stage) {
   progress[world] ??= new Set();
   if (progress[world].has(stage)) return;
   progress[world].add(stage);
-  save(progress);
+  saveSets(KEY, progress);
 }
 
 export const isCleared = (progress, world, stage) => !!progress[world]?.has(stage);
 export const clearedCount = (progress, world) => progress[world]?.size ?? 0;
+
+// The stages cleared perfectly, each wearing a crown (2026-11-05: no blocked arrow
+// tapped, no hint, no eraser), world → Set of stage numbers. markPerfect says whether
+// the stage is new to it, as its coin bonus is paid once.
+export const loadPerfect = () => loadSets(PERFECT_KEY);
+export function markPerfect(perfect, world, stage) {
+  perfect[world] ??= new Set();
+  if (perfect[world].has(stage)) return false;
+  perfect[world].add(stage);
+  saveSets(PERFECT_KEY, perfect);
+  return true;
+}
+export const isPerfect = (perfect, world, stage) => !!perfect[world]?.has(stage);
+export const perfectCount = (perfect, world) => perfect[world]?.size ?? 0;
 
 // Stars a country has earned (0–3); home gives none.
 export const starsOf = (progress, world) =>

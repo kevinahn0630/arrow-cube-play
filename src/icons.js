@@ -1,7 +1,8 @@
 // Small icons (SVG strings). The items, what the shop sells, the home screen's tabs, the
-// sound button, the stage's home button and the clear card's ad are drawn like toys, soft
-// and rounded with a lighter and a darker side and no outline (2026-11-03 user picks,
-// dist/samples/icons.html 안 1 and tabs2.html; 2026-11-04 clear.html 안 B); the rest are
+// sound button, the stage's home button, the clear card's ad and a perfect clear's crown
+// are drawn like toys, soft and rounded with a lighter and a darker side and no outline
+// (2026-11-03 user picks, dist/samples/icons.html 안 1 and tabs2.html; 2026-11-04
+// clear.html 안 B; 2026-11-05 perfect.html 안 B); the rest are
 // line icons: round caps, strokes in currentColor. The coin is gold with the game's up arrow.
 const COIN = '<circle cx="10" cy="10" r="9.3" fill="#efb245"/><circle cx="10" cy="10" r="7" fill="#f8cb63" stroke="#fde4a3" stroke-width="1.2"/><path d="M10 13.7V6.8M7.3 9.4 10 6.7l2.7 2.7" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>';
 // A coin with a white rim, so coins lying on each other stay apart.
@@ -13,6 +14,23 @@ const SHADOW = '<ellipse cx="24" cy="43.4" rx="15" ry="2.6" fill="#4a3f5c" opaci
 // A star on a world's page: earned in gold, still to come in grey.
 const star = (on) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.3L12 17l-5.7 3 1.2-6.3-4.7-4.4 6.4-.8Z" fill="${on ? '#ffc93f' : '#ddd3dc'}" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><path d="M9.2 8.6 12 5.2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="${on ? 0.8 : 0.5}"/></svg>`;
+// A perfect clear's crown, a toy in gold; grey and cracked once a mistake, a hint or the
+// eraser has lost it (2026-11-05, dist/samples/perfect.html 안 B).
+const crown = (on) => {
+  const c = on
+    ? { body: '#ffcd4a', side: '#f4ad37', band: '#f0a234', bandSide: '#dd8f2a', ball: '#ffeaa6', gem: '#f68c7c' }
+    : { body: '#e2d9e1', side: '#d2c6d1', band: '#c9bdc8', bandSide: '#b8abb7', ball: '#f1ecf1', gem: '#b3a6b2' };
+  return `<svg class="toy crown" viewBox="0 0 48 48" aria-hidden="true">
+    <path d="M9 18 16.5 26.5 24 12 31.5 26.5 39 18 36.2 36H11.8Z" fill="${c.body}" stroke="${c.body}" stroke-width="4.6" stroke-linejoin="round"/>
+    <path d="M31.5 26.5 39 18 36.2 36H29.4Z" fill="${c.side}" stroke="${c.side}" stroke-width="4.6" stroke-linejoin="round"/>
+    <rect x="9.6" y="31.4" width="28.8" height="8.2" rx="3.4" fill="${c.band}"/>
+    <path d="M30.6 31.4h4.4a3.4 3.4 0 0 1 3.4 3.4v1.4a3.4 3.4 0 0 1-3.4 3.4h-4.4Z" fill="${c.bandSide}"/>
+    <circle cx="8.6" cy="17.4" r="3.5" fill="${c.ball}"/><circle cx="24" cy="10.8" r="3.7" fill="${c.ball}"/><circle cx="39.4" cy="17.4" r="3.5" fill="${c.ball}"/>
+    <circle cx="24" cy="35.5" r="2.5" fill="${c.gem}"/><circle cx="16.2" cy="35.5" r="1.4" fill="#fff" opacity="0.75"/><circle cx="31.8" cy="35.5" r="1.4" fill="#fff" opacity="0.6"/>
+    <path d="M13.8 22.6l3.4 3.8" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="${on ? 0.7 : 0.5}"/>${
+      on ? '' : '<path d="M25.4 14.6 22 21.6l4.4 3.2-3.6 6.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
+    }</svg>`;
+};
 // A speaker, its sound waves in gold; muted, grey with a red cross.
 const speaker = (on) =>
   toy(`<path d="M7 19.4a3 3 0 0 1 3-3h5.4v15.2H10a3 3 0 0 1-3-3Z" fill="${on ? '#9eabd0' : '#c4bfd0'}"/>
@@ -93,6 +111,9 @@ export const ICON = {
   // tutorial's play mark.
   starOn: star(true),
   starOff: star(false),
+  // A perfect clear's crown, and the grey cracked one of a stage that missed it.
+  crown: crown(true),
+  crownLost: crown(false),
   pin: '<svg viewBox="0 0 40 48" aria-hidden="true"><path d="M20 46c-1.6-6-15-14-15-26a15 15 0 0 1 30 0c0 12-13.4 20-15 26Z" fill="currentColor" stroke="#fff" stroke-width="2.4"/><circle cx="20" cy="19.5" r="7" fill="#fff"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.4v13.2L18.6 12Z" fill="currentColor"/></svg>',
   // On to a stage (the clear card's next step, after its number): a play mark with soft corners.

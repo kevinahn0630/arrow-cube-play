@@ -14,6 +14,10 @@ export function coinsFor(world, stage, again = false) {
   const full = tier ? COINS[tier][Math.min(3, Math.floor((stage - 1) / 10))] : stage <= 10 ? 20 : 50;
   return again ? Math.round(full / 5) : full;
 }
+// A stage cleared perfectly for the first time (no blocked arrow tapped, no hint, no
+// eraser; 2026-11-05, the user's pick of dist/samples/perfect.html 안 B) pays half its
+// first clear's coins more, once.
+export const perfectBonus = (world, stage) => Math.round(coinsFor(world, stage) / 2);
 
 export const PRICE = { hint: 200, eraser: 500 };
 // What a new player starts with.
